@@ -1,11 +1,10 @@
-let SESION = null, CENTROS = [], AREAS = [], AOIS = [];
+let SESION = null, PERFIL = null, CENTROS = [], AREAS = [], AOIS = [];
 const fmt = n => Number(n || 0).toLocaleString('es-PE', { maximumFractionDigits: 2 });
 const nombreArea = id => (AREAS.find(a => a.id === id) || {}).nombre || '';
 const centroDeArea = id => {
   const a = AREAS.find(x => x.id === id) || {};
   return (CENTROS.find(c => c.id === a.centro_costo_id) || {}).nombre || '';
 };
-const nombreCC = id => (CENTROS.find(c => c.id === id) || {}).nombre || '';
 
 document.addEventListener('DOMContentLoaded', inicializar);
 
@@ -14,18 +13,21 @@ async function inicializar() {
   if (!SESION) return;
   document.getElementById('usuario-email').textContent = SESION.user.email;
 
-  const [c, a, o] = await Promise.all([
+  const [c, a, o, p] = await Promise.all([
     supabase.from('centros_costos').select('*').order('codigo'),
     supabase.from('areas').select('*').order('nombre'),
-    supabase.from('actividades_operativas').select('*').order('codigo')
+    supabase.from('actividades_operativas').select('*').order('codigo'),
+    supabase.from('profiles').select('*').eq('id', SESION.user.id).maybeSingle()
   ]);
   CENTROS = c.data || []; AREAS = a.data || []; AOIS = o.data || [];
+  PERFIL = p || { rol: 'consulta', area_id: null, centro_costo_id: null };
 
+  aplicarPermisos();
   renderInicio();
   llenarSelectAreas();
   llenarSelectCentrosCosto();
 
-  document.querySelectorAll('[data-tab]').forEach(b => 
+  document.querySelectorAll('[data-tab]').forEach(b =>
     b.addEventListener('click', () => cambiarTab(b.dataset.tab)));
   document.getElementById('btn-cerrar').addEventListener('click', cerrarSesion);
   document.getElementById('sel-area-reg').addEventListener('change', cargarAOIsDeArea);
@@ -37,6 +39,21 @@ async function inicializar() {
   document.getElementById('form-modificaciones').addEventListener('submit', guardarModificacion);
   document.getElementById('btn-reporte').addEventListener('click', generarReporte);
   generarReporte();
+}
+
+function aplicarPermisos() {
+  const rol = PERFIL.rol;
+  const tabReg = document.querySelector('[data-tab="registro"]');
+  const tabMod = document.querySelector('[data-tab="modificaciones"]');
+  if (rol === 'usuario_area') {
+    tabMod.style.display = 'none';
+    AREAS = AREAS.filter(a => a.id === PERFIL.area_id);
+  } else if (rol === 'usuario_cc') {
+    tabReg.style.display = 'none';
+  } else if (rol === 'consulta') {
+    tabReg.style.display = 'none';
+    tabMod.style.display = 'none';
+  }
 }
 
 function cambiarTab(nombre) {
@@ -65,14 +82,18 @@ function renderInicio() {
 }
 
 function llenarSelectAreas() {
-  document.getElementById('sel-area-reg').innerHTML =
-    AREAS.map(a => `<option value="${a.id}">${a.nombre} — ${centroDeArea(a.id)}</option>`).join('');
+  const sel = document.getElementById('sel-area-reg');
+  if (!sel) return;
+  sel.innerHTML = AREAS.map(a => `<option value="${a.id}">${a.nombre} — ${centroDeArea(a.id)}</option>`).join('');
   cargarAOIsDeArea();
 }
 
 function llenarSelectCentrosCosto() {
-  document.getElementById('sel-cc-mod').innerHTML =
-    CENTROS.map(c => `<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`).join('');
+  const sel = document.getElementById('sel-cc-mod');
+  if (!sel) return;
+  let lista = CENTROS;
+  if (PERFIL.rol === 'usuario_cc') lista = CENTROS.filter(c => c.id === PERFIL.centro_costo_id);
+  sel.innerHTML = lista.map(c => `<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`).join('');
   cargarModificacionExistente();
 }
 
@@ -193,7 +214,7 @@ async function generarReporte() {
       <td class="p-2 text-center"><span class="px-2 py-1 rounded-full text-xs font-bold ${clase}">${pct.toFixed(1)}%</span></td></tr>`;
   });
 
-  document.getElementById('tabla-reporte').innerHTML = html || 
+  document.getElementById('tabla-reporte').innerHTML = html ||
     '<tr><td colspan="6" class="p-4 text-center text-slate-500">Sin datos para el periodo seleccionado.</td></tr>';
   document.getElementById('kpi-fisico').textContent = tm > 0 ? (te / tm * 100).toFixed(1) + '%' : '—';
   document.getElementById('kpi-financiero').textContent = tfp > 0 ? (tfe / tfp * 100).toFixed(1) + '%' : '—';
