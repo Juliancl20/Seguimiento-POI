@@ -1,4 +1,4 @@
-let SESION = null, PERFIL = null, CENTROS = [], AREAS = [], AOIS = [], REPORTE = null;
+let SESION = null, PERFIL = null, CENTROS = [], AREAS = [], AOIS = [], REPORTE = null, EDIT_USU = null;
 const fmt = n => Number(n || 0).toLocaleString('es-PE', { maximumFractionDigits: 2 });
 const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre'];
 const nombreArea = id => (AREAS.find(a => a.id === id) || {}).nombre || '';
@@ -20,25 +20,38 @@ async function inicializar() {
     supabase.from('profiles').select('*').eq('id', SESION.user.id).maybeSingle()
   ]);
   CENTROS = c.data || []; AREAS = a.data || []; AOIS = o.data || [];
-  PERFIL = p || { rol: 'consulta', area_id: null, centro_costo_id: null };
+  PERFIL = p || { rol: 'consulta', area_id: null, centro_costo_id: null, estado: 'activo' };
+
+  if (PERFIL.estado && PERFIL.estado !== 'activo') {
+    alert(' Su usuario se encuentra ' + PERFIL.estado + '. Contacte al administrador del sistema.');
+    await cerrarSesion();
+    return;
+  }
+
   document.getElementById('usuario-email').textContent = SESION.user.email + '  |  Rol: ' + PERFIL.rol;
 
   aplicarPermisos();
   construirUIReportes();
   renderInicio();
-  llenarSelectAreas();
+  llenarSelectCCReg();
   llenarSelectCentrosCosto();
+  llenarSelectsUsuario();
+  if (PERFIL.rol === 'admin') cargarUsuarios();
 
   document.querySelectorAll('[data-tab]').forEach(b =>
     b.addEventListener('click', () => cambiarTab(b.dataset.tab)));
   document.getElementById('btn-cerrar').addEventListener('click', cerrarSesion);
+  document.getElementById('sel-cc-reg').addEventListener('change', cargarAreasDeCC);
   document.getElementById('sel-area-reg').addEventListener('change', cargarAOIsDeArea);
   document.getElementById('sel-aoi-reg').addEventListener('change', cargarEjecucionExistente);
+  document.getElementById('reg-anio').addEventListener('change', cargarEjecucionExistente);
   document.getElementById('reg-mes').addEventListener('change', cargarEjecucionExistente);
   document.getElementById('form-registro').addEventListener('submit', guardarEjecucion);
   document.getElementById('sel-cc-mod').addEventListener('change', cargarModificacionExistente);
   document.getElementById('mod-mes').addEventListener('change', cargarModificacionExistente);
   document.getElementById('form-modificaciones').addEventListener('submit', guardarModificacion);
+  document.getElementById('form-usuario').addEventListener('submit', guardarUsuario);
+  document.getElementById('btn-usu-cancelar').addEventListener('click', cancelarEdicion);
   document.getElementById('btn-reporte').addEventListener('click', generarReporte);
   document.getElementById('btn-excel').addEventListener('click', exportarExcel);
   document.getElementById('btn-pdf').addEventListener('click', exportarPDF);
@@ -49,6 +62,8 @@ function aplicarPermisos() {
   const rol = PERFIL.rol;
   const tabReg = document.querySelector('[data-tab="registro"]');
   const tabMod = document.querySelector('[data-tab="modificaciones"]');
+  const tabUsu = document.querySelector('[data-tab="usuarios"]');
+  if (rol !== 'admin') tabUsu.style.display = 'none';
   if (rol === 'usuario_area') {
     tabMod.style.display = 'none';
     AREAS = AREAS.filter(a => a.id === PERFIL.area_id);
@@ -62,7 +77,7 @@ function aplicarPermisos() {
 }
 
 function cambiarTab(nombre) {
-  ['inicio','registro','modificaciones','reportes'].forEach(t =>
+  ['inicio','registro','modificaciones','usuarios','reportes'].forEach(t =>
     document.getElementById('tab-' + t).classList.toggle('hidden', t !== nombre));
   document.querySelectorAll('[data-tab]').forEach(b =>
     b.classList.toggle('tab-activa', b.dataset.tab === nombre));
@@ -86,27 +101,29 @@ function renderInicio() {
   document.getElementById('tabla-catalogo').innerHTML = html;
 }
 
-function llenarSelectAreas() {
-  const sel = document.getElementById('sel-area-reg');
-  if (!sel) return;
-  sel.innerHTML = AREAS.map(a => `<option value="${a.id}">${a.nombre} — ${centroDeArea(a.id).nombre || ''}</option>`).join('');
-  cargarAOIsDeArea();
-}
-
-function llenarSelectCentrosCosto() {
-  const sel = document.getElementById('sel-cc-mod');
+// ================= SEGUIMIENTO MENSUAL (CC -> Área -> AOI -> Año -> Mes) =================
+function llenarSelectCCReg() {
+  const sel = document.getElementById('sel-cc-reg');
   if (!sel) return;
   let lista = CENTROS;
-  if (PERFIL.rol === 'usuario_cc') lista = CENTROS.filter(c => c.id === PERFIL.centro_costo_id);
+  if (PERFIL.rol === 'usuario_area') lista = CENTROS.filter(c => c.id === PERFIL.centro_costo_id);
   sel.innerHTML = lista.map(c => `<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`).join('');
-  cargarModificacionExistente();
+  cargarAreasDeCC();
+}
+
+function cargarAreasDeCC() {
+  const ccId = document.getElementById('sel-cc-reg').value;
+  const areas = AREAS.filter(a => a.centro_costo_id === ccId);
+  document.getElementById('sel-area-reg').innerHTML =
+    areas.map(a => `<option value="${a.id}">${a.nombre}</option>`).join('') || '<option value="">Sin áreas</option>';
+  cargarAOIsDeArea();
 }
 
 function cargarAOIsDeArea() {
   const areaId = document.getElementById('sel-area-reg').value;
   const aois = AOIS.filter(o => o.area_id === areaId);
   document.getElementById('sel-aoi-reg').innerHTML =
-    aois.map(o => `<option value="${o.id}">${o.codigo} — ${o.nombre}</option>`).join('');
+    aois.map(o => `<option value="${o.id}">${o.codigo} — ${o.nombre}</option>`).join('') || '<option value="">Sin AOI</option>';
   cargarEjecucionExistente();
 }
 
@@ -143,8 +160,18 @@ async function guardarEjecucion(e) {
   const { error } = await supabase.from('ejecucion_mensual')
     .upsert(registro, { onConflict: 'actividad_id,anio,mes' });
   msg.classList.remove('hidden');
-  msg.textContent = error ? '❌ Error: ' + error.message : '✅ Ejecución guardada correctamente.';
+  msg.textContent = error ? '❌ Error: ' + error.message : '✅ Seguimiento guardado correctamente.';
   msg.className = 'text-sm ' + (error ? 'text-red-600' : 'text-green-700');
+}
+
+// ================= MODIFICACIONES =================
+function llenarSelectCentrosCosto() {
+  const sel = document.getElementById('sel-cc-mod');
+  if (!sel) return;
+  let lista = CENTROS;
+  if (PERFIL.rol === 'usuario_cc') lista = CENTROS.filter(c => c.id === PERFIL.centro_costo_id);
+  sel.innerHTML = lista.map(c => `<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`).join('');
+  cargarModificacionExistente();
 }
 
 async function cargarModificacionExistente() {
@@ -179,7 +206,105 @@ async function guardarModificacion(e) {
   msg.className = 'text-sm ' + (error ? 'text-red-600' : 'text-green-700');
 }
 
-// ================= REPORTES AVANZADOS =================
+// ================= MÓDULO DE USUARIOS =================
+function llenarSelectsUsuario() {
+  const sa = document.getElementById('usu-area');
+  const sc = document.getElementById('usu-cc');
+  if (!sa || !sc) return;
+  sa.innerHTML = '<option value="">—</option>' + AREAS.map(a => `<option value="${a.id}">${a.nombre} — ${centroDeArea(a.id).nombre || ''}</option>`).join('');
+  sc.innerHTML = '<option value="">—</option>' + CENTROS.map(c => `<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`).join('');
+}
+
+async function cargarUsuarios() {
+  const { data } = await supabase.from('profiles').select('*').order('email');
+  const rows = (data || []).map(p => {
+    const area = AREAS.find(a => a.id === p.area_id);
+    const cc = CENTROS.find(c => c.id === p.centro_costo_id);
+    const asign = area ? area.nombre : (cc ? cc.codigo + ' ' + cc.nombre : '—');
+    const est = p.estado || 'activo';
+    const cls = est === 'activo' ? 'sem-verde' : (est === 'inactivo' ? 'sem-amarillo' : 'sem-rojo');
+    const yo = p.id === SESION.user.id ? ' (usted)' : '';
+    return `<tr class="hover:bg-slate-50">
+      <td class="p-2">${p.nombres || ''}${yo}</td>
+      <td class="p-2">${p.email}</td>
+      <td class="p-2">${p.rol}</td>
+      <td class="p-2">${asign}</td>
+      <td class="p-2 text-center"><span class="px-2 py-1 rounded-full text-xs font-bold ${cls}">${est}</span></td>
+      <td class="p-2 whitespace-nowrap">
+        <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded" onclick="editarUsuario('${p.id}')">✏️ Reasignar</button>
+        <button class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-2 py-1 rounded" onclick="toggleEstado('${p.id}')">${est === 'activo' ? '🚫 Desactivar' : '✅ Activar'}</button>
+        <button class="bg-red-600 hover:bg-red-700 text-white text-xs px-2 py-1 rounded" onclick="eliminarUsuario('${p.id}')">🗑️ Eliminar</button>
+      </td></tr>`;
+  }).join('');
+  document.getElementById('tabla-usuarios').innerHTML = rows || '<tr><td colspan="6" class="p-4 text-center text-slate-500">Sin usuarios.</td></tr>';
+}
+
+async function guardarUsuario(e) {
+  e.preventDefault();
+  const msg = document.getElementById('msg-usu');
+  msg.classList.remove('hidden');
+  const nombres = document.getElementById('usu-nombres').value;
+  const email = document.getElementById('usu-email').value;
+  const rol = document.getElementById('usu-rol').value;
+  const area_id = document.getElementById('usu-area').value || null;
+  const centro_costo_id = document.getElementById('usu-cc').value || null;
+
+  if (EDIT_USU) {
+    const { error } = await supabase.from('profiles').update({ nombres, rol, area_id, centro_costo_id }).eq('id', EDIT_USU);
+    msg.textContent = error ? '❌ Error: ' + error.message : '✅ Usuario reasignado correctamente.';
+    msg.className = 'text-sm ' + (error ? 'text-red-600' : 'text-green-700');
+    cancelarEdicion();
+  } else {
+    const password = document.getElementById('usu-password').value;
+    if (!email || !password) { msg.textContent = '❌ Complete correo y contraseña.'; msg.className = 'text-sm text-red-600'; return; }
+    const tmp = window.crearCliente({ auth: { persistSession: false, autoRefreshToken: false } });
+    const { data, error } = await tmp.auth.signUp({ email, password, options: { data: { nombres } } });
+    if (error) { msg.textContent = '❌ Error al crear: ' + error.message; msg.className = 'text-sm text-red-600'; return; }
+    const { error: e2 } = await supabase.from('profiles').update({ nombres, rol, area_id, centro_costo_id, estado: 'activo' }).eq('id', data.user.id);
+    msg.textContent = e2 ? '❌ Error al asignar rol: ' + e2.message : '✅ Usuario creado y asignado correctamente.';
+    msg.className = 'text-sm ' + (e2 ? 'text-red-600' : 'text-green-700');
+    document.getElementById('usu-password').value = '';
+  }
+  cargarUsuarios();
+}
+
+async function editarUsuario(id) {
+  const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+  if (!data) return;
+  EDIT_USU = id;
+  document.getElementById('usu-nombres').value = data.nombres || '';
+  document.getElementById('usu-email').value = data.email;
+  document.getElementById('usu-rol').value = data.rol;
+  document.getElementById('usu-area').value = data.area_id || '';
+  document.getElementById('usu-cc').value = data.centro_costo_id || '';
+  document.getElementById('btn-usu-guardar').textContent = '💾 Guardar cambios';
+  document.getElementById('btn-usu-cancelar').classList.remove('hidden');
+}
+
+function cancelarEdicion() {
+  EDIT_USU = null;
+  document.getElementById('form-usuario').reset();
+  document.getElementById('btn-usu-guardar').textContent = '➕ Crear usuario';
+  document.getElementById('btn-usu-cancelar').classList.add('hidden');
+}
+
+async function toggleEstado(id) {
+  if (id === SESION.user.id) { alert('No puede desactivar su propio usuario.'); return; }
+  const { data } = await supabase.from('profiles').select('estado').eq('id', id).maybeSingle();
+  if (!data) return;
+  const nuevo = (data.estado === 'activo') ? 'inactivo' : 'activo';
+  await supabase.from('profiles').update({ estado: nuevo }).eq('id', id);
+  cargarUsuarios();
+}
+
+async function eliminarUsuario(id) {
+  if (id === SESION.user.id) { alert('No puede eliminar su propio usuario.'); return; }
+  if (!confirm('Se eliminará el usuario (perderá el acceso al sistema). ¿Desea continuar?')) return;
+  await supabase.from('profiles').update({ estado: 'eliminado', rol: 'consulta', area_id: null, centro_costo_id: null }).eq('id', id);
+  cargarUsuarios();
+}
+
+// ================= REPORTES =================
 function construirUIReportes() {
   const hoy = new Date();
   document.getElementById('tab-reportes').innerHTML = `
