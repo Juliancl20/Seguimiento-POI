@@ -1,4 +1,4 @@
-let SESION = null, PERFIL = null, CENTROS = [], AREAS = [], AOIS = [], REPORTE = null, EDIT_USU = null;
+let SESION = null, PERFIL = null, CENTROS = [], AREAS = [], AOIS = [], REPORTE = null, EDIT_USU = null, MODO_LECTURA_REG = false;
 const fmt = n => Number(n || 0).toLocaleString('es-PE', { maximumFractionDigits: 2 });
 const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre'];
 const nombreArea = id => (AREAS.find(a => a.id === id) || {}).nombre || '';
@@ -32,6 +32,10 @@ async function inicializar() {
 
   aplicarPermisos();
   construirUIReportes();
+  if (PERFIL.rol === 'usuario_cc') {
+    const rc = document.getElementById('rep-cc');
+    if (rc) rc.value = PERFIL.centro_costo_id;
+  }
   renderInicio();
   llenarSelectCCReg();
   llenarSelectCentrosCosto();
@@ -64,15 +68,32 @@ function aplicarPermisos() {
   const tabMod = document.querySelector('[data-tab="modificaciones"]');
   const tabUsu = document.querySelector('[data-tab="usuarios"]');
   if (rol !== 'admin') tabUsu.style.display = 'none';
+
   if (rol === 'usuario_area') {
     tabMod.style.display = 'none';
     AREAS = AREAS.filter(a => a.id === PERFIL.area_id);
     AOIS = AOIS.filter(o => o.area_id === PERFIL.area_id);
   } else if (rol === 'usuario_cc') {
-    tabReg.style.display = 'none';
+    // Acceso de CONSULTA a las áreas de su Centro de Costos para hacer seguimiento
+    MODO_LECTURA_REG = true;
+    AREAS = AREAS.filter(a => a.centro_costo_id === PERFIL.centro_costo_id);
+    AOIS = AOIS.filter(o => AREAS.some(a => a.id === o.area_id));
   } else if (rol === 'consulta') {
     tabReg.style.display = 'none';
     tabMod.style.display = 'none';
+  }
+
+  if (MODO_LECTURA_REG) {
+    ['reg-fisica','reg-financiera','reg-logros','reg-limitaciones','reg-medidas'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = true;
+    });
+    const btn = document.querySelector('#form-registro button[type="submit"]');
+    if (btn) btn.style.display = 'none';
+    const nota = document.createElement('p');
+    nota.className = 'text-sm text-amber-700 bg-amber-50 border border-amber-300 rounded-lg p-3 mb-4';
+    nota.textContent = '👁️ Modo consulta: usted visualiza el seguimiento mensual de las áreas de su Centro de Costos para verificar su registro.';
+    document.getElementById('form-registro').prepend(nota);
   }
 }
 
@@ -101,12 +122,12 @@ function renderInicio() {
   document.getElementById('tabla-catalogo').innerHTML = html;
 }
 
-// ================= SEGUIMIENTO MENSUAL (CC -> Área -> AOI -> Año -> Mes) =================
+// ================= SEGUIMIENTO MENSUAL =================
 function llenarSelectCCReg() {
   const sel = document.getElementById('sel-cc-reg');
   if (!sel) return;
   let lista = CENTROS;
-  if (PERFIL.rol === 'usuario_area') lista = CENTROS.filter(c => c.id === PERFIL.centro_costo_id);
+  if (PERFIL.rol !== 'admin') lista = CENTROS.filter(c => c.id === PERFIL.centro_costo_id);
   sel.innerHTML = lista.map(c => `<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`).join('');
   cargarAreasDeCC();
 }
@@ -143,6 +164,7 @@ async function cargarEjecucionExistente() {
 
 async function guardarEjecucion(e) {
   e.preventDefault();
+  if (MODO_LECTURA_REG) return;
   const msg = document.getElementById('msg-registro');
   const registro = {
     actividad_id: document.getElementById('sel-aoi-reg').value,
