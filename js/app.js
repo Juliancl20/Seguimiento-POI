@@ -20,7 +20,7 @@ async function inicializar() {
     supabase.from('profiles').select('*').eq('id', SESION.user.id).maybeSingle()
   ]);
   CENTROS = c.data || []; AREAS = a.data || []; AOIS = o.data || [];
-  PERFIL = p || { rol: 'consulta', area_id: null, centro_costo_id: null, estado: 'activo' };
+  PERFIL = p.data || { rol: 'consulta', area_id: null, centro_costo_id: null, estado: 'activo' };
 
   if (PERFIL.estado && PERFIL.estado !== 'activo') {
     alert(' Su usuario se encuentra ' + PERFIL.estado + '. Contacte al administrador del sistema.');
