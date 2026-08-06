@@ -1,9 +1,10 @@
-let SESION = null, PERFIL = null, CENTROS = [], AREAS = [], AOIS = [];
+let SESION = null, PERFIL = null, CENTROS = [], AREAS = [], AOIS = [], REPORTE = null;
 const fmt = n => Number(n || 0).toLocaleString('es-PE', { maximumFractionDigits: 2 });
+const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre'];
 const nombreArea = id => (AREAS.find(a => a.id === id) || {}).nombre || '';
 const centroDeArea = id => {
   const a = AREAS.find(x => x.id === id) || {};
-  return (CENTROS.find(c => c.id === a.centro_costo_id) || {}).nombre || '';
+  return (CENTROS.find(c => c.id === a.centro_costo_id) || {});
 };
 
 document.addEventListener('DOMContentLoaded', inicializar);
@@ -11,7 +12,6 @@ document.addEventListener('DOMContentLoaded', inicializar);
 async function inicializar() {
   SESION = await requerirSesion();
   if (!SESION) return;
-  document.getElementById('usuario-email').textContent = SESION.user.email;
 
   const [c, a, o, p] = await Promise.all([
     supabase.from('centros_costos').select('*').order('codigo'),
@@ -21,8 +21,10 @@ async function inicializar() {
   ]);
   CENTROS = c.data || []; AREAS = a.data || []; AOIS = o.data || [];
   PERFIL = p || { rol: 'consulta', area_id: null, centro_costo_id: null };
+  document.getElementById('usuario-email').textContent = SESION.user.email + '  |  Rol: ' + PERFIL.rol;
 
   aplicarPermisos();
+  construirUIReportes();
   renderInicio();
   llenarSelectAreas();
   llenarSelectCentrosCosto();
@@ -38,6 +40,8 @@ async function inicializar() {
   document.getElementById('mod-mes').addEventListener('change', cargarModificacionExistente);
   document.getElementById('form-modificaciones').addEventListener('submit', guardarModificacion);
   document.getElementById('btn-reporte').addEventListener('click', generarReporte);
+  document.getElementById('btn-excel').addEventListener('click', exportarExcel);
+  document.getElementById('btn-pdf').addEventListener('click', exportarPDF);
   generarReporte();
 }
 
@@ -48,6 +52,7 @@ function aplicarPermisos() {
   if (rol === 'usuario_area') {
     tabMod.style.display = 'none';
     AREAS = AREAS.filter(a => a.id === PERFIL.area_id);
+    AOIS = AOIS.filter(o => o.area_id === PERFIL.area_id);
   } else if (rol === 'usuario_cc') {
     tabReg.style.display = 'none';
   } else if (rol === 'consulta') {
@@ -84,7 +89,7 @@ function renderInicio() {
 function llenarSelectAreas() {
   const sel = document.getElementById('sel-area-reg');
   if (!sel) return;
-  sel.innerHTML = AREAS.map(a => `<option value="${a.id}">${a.nombre} — ${centroDeArea(a.id)}</option>`).join('');
+  sel.innerHTML = AREAS.map(a => `<option value="${a.id}">${a.nombre} — ${centroDeArea(a.id).nombre || ''}</option>`).join('');
   cargarAOIsDeArea();
 }
 
@@ -138,13 +143,8 @@ async function guardarEjecucion(e) {
   const { error } = await supabase.from('ejecucion_mensual')
     .upsert(registro, { onConflict: 'actividad_id,anio,mes' });
   msg.classList.remove('hidden');
-  if (error) {
-    msg.textContent = '❌ Error: ' + error.message;
-    msg.className = 'text-sm text-red-600';
-  } else {
-    msg.textContent = '✅ Ejecución guardada correctamente.';
-    msg.className = 'text-sm text-green-700';
-  }
+  msg.textContent = error ? '❌ Error: ' + error.message : '✅ Ejecución guardada correctamente.';
+  msg.className = 'text-sm ' + (error ? 'text-red-600' : 'text-green-700');
 }
 
 async function cargarModificacionExistente() {
@@ -175,47 +175,174 @@ async function guardarModificacion(e) {
   const { error } = await supabase.from('modificaciones_mensuales_cc')
     .upsert(registro, { onConflict: 'centro_costo_id,anio,mes' });
   msg.classList.remove('hidden');
-  if (error) {
-    msg.textContent = '❌ Error: ' + error.message;
-    msg.className = 'text-sm text-red-600';
-  } else {
-    msg.textContent = '✅ Modificaciones guardadas correctamente.';
-    msg.className = 'text-sm text-green-700';
-  }
+  msg.textContent = error ? '❌ Error: ' + error.message : '✅ Modificaciones guardadas correctamente.';
+  msg.className = 'text-sm ' + (error ? 'text-red-600' : 'text-green-700');
+}
+
+// ================= REPORTES AVANZADOS =================
+function construirUIReportes() {
+  const hoy = new Date();
+  document.getElementById('tab-reportes').innerHTML = `
+    <div class="bg-white rounded-xl shadow p-6 mb-4 no-print">
+      <h2 class="text-lg font-bold text-slate-800 mb-4">📈 Reportes de Ejecución Física y Financiera</h2>
+      <div class="flex flex-wrap gap-4 items-end">
+        <div><label class="text-sm font-medium text-slate-600">Año</label><input id="rep-anio" type="number" value="${hoy.getFullYear()}" class="w-full border rounded-lg px-3 py-2"></div>
+        <div><label class="text-sm font-medium text-slate-600">Mes de corte</label><select id="rep-mes" class="w-full border rounded-lg px-3 py-2">${MESES.slice(1).map((m,i)=>`<option value="${i+1}" ${i+1===hoy.getMonth()+1?'selected':''}>${m}</option>`).join('')}</select></div>
+        <div><label class="text-sm font-medium text-slate-600">Centro de Costos</label><select id="rep-cc" class="w-full border rounded-lg px-3 py-2"><option value="">Todos</option>${CENTROS.map(c=>`<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`).join('')}</select></div>
+        <button id="btn-reporte" class="bg-blue-700 hover:bg-blue-800 text-white font-semibold px-6 py-2.5 rounded-lg">Generar</button>
+        <button id="btn-excel" class="bg-green-700 hover:bg-green-800 text-white font-semibold px-4 py-2.5 rounded-lg">⬇️ Excel</button>
+        <button id="btn-pdf" class="bg-red-700 hover:bg-red-800 text-white font-semibold px-4 py-2.5 rounded-lg">🖨️ PDF</button>
+      </div>
+    </div>
+    <div id="zona-imprimir">
+      <h2 class="text-lg font-bold text-slate-800 mb-1">Seguimiento POI — Programa Nuestras Ciudades</h2>
+      <p class="text-sm text-slate-500 mb-4" id="rep-periodo"></p>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <div class="bg-white rounded-xl shadow p-5 text-center"><p class="text-2xl font-bold text-blue-700" id="kpi-fisico">—</p><p class="text-sm text-slate-500">% Avance físico acumulado</p></div>
+        <div class="bg-white rounded-xl shadow p-5 text-center"><p class="text-2xl font-bold text-blue-700" id="kpi-financiero">—</p><p class="text-sm text-slate-500">% Ejecución financiera acumulada</p></div>
+        <div class="bg-white rounded-xl shadow p-5 text-center"><p class="text-2xl font-bold text-blue-700" id="kpi-pim">—</p><p class="text-sm text-slate-500">PIM al corte (S/)</p></div>
+      </div>
+      <div class="bg-white rounded-xl shadow overflow-x-auto mb-6">
+        <table class="w-full text-sm"><thead class="bg-slate-800 text-white"><tr>
+          <th class="p-2 text-left">C. Costo</th><th class="p-2 text-left">Área / AOI</th><th class="p-2">Unidad</th>
+          <th class="p-2 text-right">Meta Mes</th><th class="p-2 text-right">Ejec. Mes</th><th class="p-2">% Mes</th>
+          <th class="p-2 text-right">Meta Acum.</th><th class="p-2 text-right">Ejec. Acum.</th><th class="p-2">% Acum.</th>
+        </tr></thead><tbody id="tabla-reporte" class="divide-y"></tbody></table>
+      </div>
+      <div class="bg-white rounded-xl shadow overflow-x-auto mb-6">
+        <h3 class="p-3 font-bold text-slate-700">💰 Ejecución Financiera por Centro de Costos</h3>
+        <table class="w-full text-sm"><thead class="bg-slate-800 text-white"><tr>
+          <th class="p-2 text-left">Centro de Costos</th><th class="p-2 text-right">PIA (S/)</th><th class="p-2 text-right">PIM (S/)</th><th class="p-2 text-right">% Var.</th><th class="p-2 text-right">Devengado Acum. (S/)</th><th class="p-2">% Ejec.</th>
+        </tr></thead><tbody id="tabla-fin" class="divide-y"></tbody></table>
+      </div>
+      <div id="zona-mods" class="mb-6"></div>
+    </div>`;
 }
 
 async function generarReporte() {
   const anio = parseInt(document.getElementById('rep-anio').value);
   const mes = parseInt(document.getElementById('rep-mes').value);
-  const [p, e] = await Promise.all([
+  const ccFiltro = document.getElementById('rep-cc').value;
+  const [p, e, m] = await Promise.all([
     supabase.from('programacion_metas').select('*').eq('anio', anio).lte('mes', mes),
-    supabase.from('ejecucion_mensual').select('*').eq('anio', anio).lte('mes', mes)
+    supabase.from('ejecucion_mensual').select('*').eq('anio', anio).lte('mes', mes),
+    supabase.from('modificaciones_mensuales_cc').select('*').eq('anio', anio).lte('mes', mes)
   ]);
-  const prog = p.data || [], ejec = e.data || [];
-  let html = '', tm = 0, te = 0, tfp = 0, tfe = 0;
+  const prog = p.data || [], ejec = e.data || [], mods = m.data || [];
 
-  AOIS.forEach(o => {
+  let aoisRep = AOIS;
+  if (ccFiltro) {
+    const areasCC = AREAS.filter(a => a.centro_costo_id === ccFiltro).map(a => a.id);
+    aoisRep = AOIS.filter(o => areasCC.includes(o.area_id));
+  }
+
+  const filas = [];
+  let tm = 0, te = 0;
+  aoisRep.forEach(o => {
     const pr = prog.filter(x => x.actividad_id === o.id);
     const ej = ejec.filter(x => x.actividad_id === o.id);
     if (!pr.length && !ej.length) return;
-    const metaAcum = pr.reduce((s, x) => s + Number(x.meta_fisica || 0), 0);
-    const ejecAcum = ej.reduce((s, x) => s + Number(x.ejecucion_fisica || 0), 0);
-    const finProg = pr.reduce((s, x) => s + Number(x.meta_financiera || 0), 0);
-    const finEjec = ej.reduce((s, x) => s + Number(x.ejecucion_financiera || 0), 0);
-    const pct = metaAcum > 0 ? (ejecAcum / metaAcum * 100) : 0;
-    const clase = pct >= 90 ? 'sem-verde' : pct >= 50 ? 'sem-amarillo' : 'sem-rojo';
-    tm += metaAcum; te += ejecAcum; tfp += finProg; tfe += finEjec;
-    html += `<tr class="hover:bg-slate-50">
-      <td class="p-2">${nombreArea(o.area_id)}</td>
-      <td class="p-2">${o.codigo}</td>
-      <td class="p-2">${o.unidad_medida || ''}</td>
-      <td class="p-2 text-right">${fmt(metaAcum)}</td>
-      <td class="p-2 text-right">${fmt(ejecAcum)}</td>
-      <td class="p-2 text-center"><span class="px-2 py-1 rounded-full text-xs font-bold ${clase}">${pct.toFixed(1)}%</span></td></tr>`;
+    const metaMes = pr.filter(x => x.mes === mes).reduce((s,x) => s + Number(x.meta_fisica||0), 0);
+    const ejecMes = ej.filter(x => x.mes === mes).reduce((s,x) => s + Number(x.ejecucion_fisica||0), 0);
+    const metaAcum = pr.reduce((s,x) => s + Number(x.meta_fisica||0), 0);
+    const ejecAcum = ej.reduce((s,x) => s + Number(x.ejecucion_fisica||0), 0);
+    const pctMes = metaMes > 0 ? ejecMes/metaMes*100 : 0;
+    const pctAcum = metaAcum > 0 ? ejecAcum/metaAcum*100 : 0;
+    tm += metaAcum; te += ejecAcum;
+    const cc = centroDeArea(o.area_id);
+    filas.push({ ccCodigo: cc.codigo || '', area: nombreArea(o.area_id), codigo: o.codigo, nombre: o.nombre, um: o.unidad_medida || '', metaMes, ejecMes, pctMes, metaAcum, ejecAcum, pctAcum });
   });
 
-  document.getElementById('tabla-reporte').innerHTML = html ||
-    '<tr><td colspan="6" class="p-4 text-center text-slate-500">Sin datos para el periodo seleccionado.</td></tr>';
-  document.getElementById('kpi-fisico').textContent = tm > 0 ? (te / tm * 100).toFixed(1) + '%' : '—';
-  document.getElementById('kpi-financiero').textContent = tfp > 0 ? (tfe / tfp * 100).toFixed(1) + '%' : '—';
+  document.getElementById('rep-periodo').textContent = 'Periodo: Enero – ' + MESES[mes] + ' ' + anio + (ccFiltro ? ' | ' + (CENTROS.find(c=>c.id===ccFiltro)||{}).nombre : ' | Todos los Centros de Costos');
+
+  document.getElementById('tabla-reporte').innerHTML = filas.map(f => {
+    const clase = f.pctAcum >= 90 ? 'sem-verde' : f.pctAcum >= 50 ? 'sem-amarillo' : 'sem-rojo';
+    return `<tr class="hover:bg-slate-50">
+      <td class="p-2">${f.ccCodigo}</td>
+      <td class="p-2"><b>${f.area}</b><br><span class="text-xs text-slate-500">${f.codigo}</span></td>
+      <td class="p-2">${f.um}</td>
+      <td class="p-2 text-right">${fmt(f.metaMes)}</td>
+      <td class="p-2 text-right">${fmt(f.ejecMes)}</td>
+      <td class="p-2 text-center">${f.pctMes.toFixed(1)}%</td>
+      <td class="p-2 text-right">${fmt(f.metaAcum)}</td>
+      <td class="p-2 text-right">${fmt(f.ejecAcum)}</td>
+      <td class="p-2 text-center"><span class="px-2 py-1 rounded-full text-xs font-bold ${clase}">${f.pctAcum.toFixed(1)}%</span></td></tr>`;
+  }).join('') || '<tr><td colspan="9" class="p-4 text-center text-slate-500">Sin datos para el periodo.</td></tr>';
+
+  const ccsRep = ccFiltro ? CENTROS.filter(c => c.id === ccFiltro) : CENTROS;
+  let tfpim = 0, tfdev = 0;
+  const finFilas = ccsRep.map(c => {
+    const mod = mods.filter(x => x.centro_costo_id === c.id).sort((a,b) => b.mes - a.mes)[0];
+    const pia = mod ? Number(mod.pia||0) : 0;
+    const pim = mod ? Number(mod.pim||0) : 0;
+    const areasCC = AREAS.filter(a => a.centro_costo_id === c.id).map(a => a.id);
+    const aoisCC = AOIS.filter(o => areasCC.includes(o.area_id)).map(o => o.id);
+    const dev = ejec.filter(x => aoisCC.includes(x.actividad_id)).reduce((s,x) => s + Number(x.ejecucion_financiera||0), 0);
+    const varPct = pia > 0 ? (pim-pia)/pia*100 : 0;
+    const ejecPct = pim > 0 ? dev/pim*100 : 0;
+    tfpim += pim; tfdev += dev;
+    return { cc: c.codigo + ' — ' + c.nombre, pia, pim, varPct, dev, ejecPct };
+  });
+
+  document.getElementById('tabla-fin').innerHTML = finFilas.map(f => `<tr class="hover:bg-slate-50">
+    <td class="p-2">${f.cc}</td>
+    <td class="p-2 text-right">${fmt(f.pia)}</td>
+    <td class="p-2 text-right">${fmt(f.pim)}</td>
+    <td class="p-2 text-right">${f.varPct.toFixed(2)}%</td>
+    <td class="p-2 text-right">${fmt(f.dev)}</td>
+    <td class="p-2 text-center">${f.ejecPct.toFixed(1)}%</td></tr>`).join('');
+
+  const modsMes = mods.filter(x => x.mes === mes);
+  document.getElementById('zona-mods').innerHTML = '<h3 class="font-bold text-slate-700 mb-2">📝 Modificaciones Presupuestales — ' + MESES[mes] + ' ' + anio + '</h3>' +
+    (modsMes.map(x => {
+      const c = CENTROS.find(cc => cc.id === x.centro_costo_id) || {};
+      return `<div class="bg-white rounded-xl shadow p-4 mb-3">
+        <p class="font-bold text-slate-800">${c.codigo} — ${c.nombre} <span class="text-xs text-slate-500">(PIA S/ ${fmt(x.pia)} | PIM S/ ${fmt(x.pim)})</span></p>
+        <p class="text-sm text-slate-600 mt-1 whitespace-pre-line">${x.comentario || 'Sin modificaciones registradas.'}</p></div>`;
+    }).join('') || '<p class="text-sm text-slate-500">Sin modificaciones registradas en el mes.</p>');
+
+  document.getElementById('kpi-fisico').textContent = tm > 0 ? (te/tm*100).toFixed(1) + '%' : '—';
+  document.getElementById('kpi-financiero').textContent = tfpim > 0 ? (tfdev/tfpim*100).toFixed(1) + '%' : '—';
+  document.getElementById('kpi-pim').textContent = fmt(tfpim);
+
+  REPORTE = { anio, mes, filas, finFilas, modsMes };
+}
+
+function exportarExcel() {
+  if (!REPORTE) { alert('Primero genere el reporte.'); return; }
+  const q = t => '"' + String(t || '').replace(/"/g,'""') + '"';
+  let csv = '\uFEFF';
+  csv += 'SEGUIMIENTO POI - PROGRAMA NUESTRAS CIUDADES\n';
+  csv += 'Periodo: Enero - ' + MESES[REPORTE.mes] + ' ' + REPORTE.anio + '\n\n';
+  csv += 'EJECUCIÓN FÍSICA\n';
+  csv += 'C.Costo;Área;AOI;Actividad;Unidad;Meta Mes;Ejec Mes;% Mes;Meta Acum;Ejec Acum;% Acum\n';
+  REPORTE.filas.forEach(f => {
+    csv += [f.ccCodigo, q(f.area), f.codigo, q(f.nombre), f.um, f.metaMes, f.ejecMes, f.pctMes.toFixed(1), f.metaAcum, f.ejecAcum, f.pctAcum.toFixed(1)].join(';') + '\n';
+  });
+  csv += '\nEJECUCIÓN FINANCIERA POR CENTRO DE COSTOS\n';
+  csv += 'Centro de Costos;PIA;PIM;% Variación;Devengado Acum;% Ejecución\n';
+  REPORTE.finFilas.forEach(f => {
+    csv += [q(f.cc), f.pia, f.pim, f.varPct.toFixed(2), f.dev, f.ejecPct.toFixed(1)].join(';') + '\n';
+  });
+  csv += '\nMODIFICACIONES PRESUPUESTALES - ' + MESES[REPORTE.mes].toUpperCase() + '\n';
+  csv += 'Centro de Costos;PIA;PIM;Comentario\n';
+  REPORTE.modsMes.forEach(x => {
+    const c = CENTROS.find(cc => cc.id === x.centro_costo_id) || {};
+    csv += [q(c.codigo + ' - ' + c.nombre), x.pia, x.pim, q(x.comentario)].join(';') + '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Reporte_POI_' + REPORTE.anio + '_' + String(REPORTE.mes).padStart(2,'0') + '.csv';
+  a.click();
+}
+
+function exportarPDF() {
+  if (!document.getElementById('css-print')) {
+    const st = document.createElement('style');
+    st.id = 'css-print';
+    st.innerHTML = '@media print { header, nav, .no-print { display: none !important; } main { max-width: 100% !important; padding: 0 !important; } section { display: none !important; } #tab-reportes { display: block !important; } table { font-size: 10px; } .bg-white { box-shadow: none !important; } }';
+    document.head.appendChild(st);
+  }
+  window.print();
 }
