@@ -23,7 +23,7 @@ async function inicializar() {
   PERFIL = p.data || { rol: 'consulta', area_id: null, centro_costo_id: null, estado: 'activo' };
 
   if (PERFIL.estado && PERFIL.estado !== 'activo') {
-    alert(' Su usuario se encuentra ' + PERFIL.estado + '. Contacte al administrador del sistema.');
+    alert('Su usuario se encuentra ' + PERFIL.estado + '. Contacte al administrador.');
     await cerrarSesion();
     return;
   }
@@ -74,7 +74,6 @@ function aplicarPermisos() {
     AREAS = AREAS.filter(a => a.id === PERFIL.area_id);
     AOIS = AOIS.filter(o => o.area_id === PERFIL.area_id);
   } else if (rol === 'usuario_cc') {
-    // Acceso de CONSULTA a las áreas de su Centro de Costos para hacer seguimiento
     MODO_LECTURA_REG = true;
     AREAS = AREAS.filter(a => a.centro_costo_id === PERFIL.centro_costo_id);
     AOIS = AOIS.filter(o => AREAS.some(a => a.id === o.area_id));
@@ -92,7 +91,7 @@ function aplicarPermisos() {
     if (btn) btn.style.display = 'none';
     const nota = document.createElement('p');
     nota.className = 'text-sm text-amber-700 bg-amber-50 border border-amber-300 rounded-lg p-3 mb-4';
-    nota.textContent = '👁️ Modo consulta: usted visualiza el seguimiento mensual de las áreas de su Centro de Costos para verificar su registro.';
+    nota.textContent = '👁️ Modo consulta: usted visualiza el seguimiento mensual de las áreas de su Centro de Costos.';
     document.getElementById('form-registro').prepend(nota);
   }
 }
@@ -122,7 +121,6 @@ function renderInicio() {
   document.getElementById('tabla-catalogo').innerHTML = html;
 }
 
-// ================= SEGUIMIENTO MENSUAL =================
 function llenarSelectCCReg() {
   const sel = document.getElementById('sel-cc-reg');
   if (!sel) return;
@@ -186,7 +184,6 @@ async function guardarEjecucion(e) {
   msg.className = 'text-sm ' + (error ? 'text-red-600' : 'text-green-700');
 }
 
-// ================= MODIFICACIONES =================
 function llenarSelectCentrosCosto() {
   const sel = document.getElementById('sel-cc-mod');
   if (!sel) return;
@@ -228,7 +225,6 @@ async function guardarModificacion(e) {
   msg.className = 'text-sm ' + (error ? 'text-red-600' : 'text-green-700');
 }
 
-// ================= MÓDULO DE USUARIOS =================
 function llenarSelectsUsuario() {
   const sa = document.getElementById('usu-area');
   const sc = document.getElementById('usu-cc');
@@ -268,8 +264,12 @@ async function guardarUsuario(e) {
   const nombres = document.getElementById('usu-nombres').value;
   const email = document.getElementById('usu-email').value;
   const rol = document.getElementById('usu-rol').value;
-  const area_id = document.getElementById('usu-area').value || null;
-  const centro_costo_id = document.getElementById('usu-cc').value || null;
+  let area_id = document.getElementById('usu-area').value || null;
+  let centro_costo_id = document.getElementById('usu-cc').value || null;
+  if (!centro_costo_id && area_id) {
+    const ar = AREAS.find(a => a.id === area_id);
+    if (ar) centro_costo_id = ar.centro_costo_id;
+  }
 
   if (EDIT_USU) {
     const { error } = await supabase.from('profiles').update({ nombres, rol, area_id, centro_costo_id }).eq('id', EDIT_USU);
@@ -326,7 +326,6 @@ async function eliminarUsuario(id) {
   cargarUsuarios();
 }
 
-// ================= REPORTES =================
 function construirUIReportes() {
   const hoy = new Date();
   document.getElementById('tab-reportes').innerHTML = `
