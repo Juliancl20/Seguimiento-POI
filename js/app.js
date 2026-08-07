@@ -759,3 +759,120 @@ async function admAddAEI() {
   if (r.error) { alert('Error: ' + r.error.message); return; }
   alert('AEI creada.'); admInit();
 }
+// ================= MÓDULO ADMINISTRACIÓN (catálogo + multianual) =================
+function mostrarTabAdmin(){
+  ['inicio','registro','modificaciones','usuarios','reportes','tablero','admin'].forEach(function(t){
+    var s=document.getElementById('tab-'+t); if(s) s.classList.add('hidden');
+  });
+  var a=document.getElementById('tab-admin'); if(a) a.classList.remove('hidden');
+  document.querySelectorAll('[data-tab],#btn-tab-admin').forEach(function(b){ b.classList.remove('tab-activa'); });
+  var ba=document.getElementById('btn-tab-admin'); if(ba) ba.classList.add('tab-activa');
+  admInit();
+}
+function instalarAdmin(){
+  var nav=document.querySelector('nav');
+  if(nav && !document.getElementById('btn-tab-admin')){
+    var b=document.createElement('button');
+    b.id='btn-tab-admin'; b.className='px-4 py-3 text-sm text-slate-600 whitespace-nowrap';
+    b.textContent='🗂️ Administración';
+    nav.appendChild(b);
+    b.addEventListener('click', function(e){ e.preventDefault(); mostrarTabAdmin(); });
+  }
+  var main=document.querySelector('main');
+  if(main && !document.getElementById('tab-admin')){
+    var s=document.createElement('section'); s.id='tab-admin'; s.className='hidden';
+    s.innerHTML =
+      '<div class="bg-white rounded-xl shadow p-6 mb-4 flex flex-wrap items-center justify-between gap-3">'+
+      '<h2 class="text-lg font-bold text-slate-800">🗂️ Administración del Catálogo</h2>'+
+      '<div class="flex items-center gap-2"><span class="text-sm text-slate-600">Año:</span>'+
+      '<input id="adm-anio" type="number" value="2026" class="border rounded-lg px-3 py-2 w-28">'+
+      '<button id="btn-nuevo-anio" class="bg-blue-700 text-white text-sm px-4 py-2 rounded-lg">➕ Abrir año nuevo</button></div></div>'+
+      '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">'+
+      '<div class="bg-white rounded-xl shadow p-6"><h3 class="font-bold text-slate-700 mb-3">➕ Agregar Área</h3><div class="space-y-2">'+
+      '<select id="na-cc" class="w-full border rounded-lg px-3 py-2"></select>'+
+      '<input id="na-nombre" placeholder="Nombre del área" class="w-full border rounded-lg px-3 py-2">'+
+      '<button id="btn-add-area" class="bg-green-700 text-white text-sm px-4 py-2 rounded-lg">Guardar área</button></div></div>'+
+      '<div class="bg-white rounded-xl shadow p-6"><h3 class="font-bold text-slate-700 mb-3">➕ Agregar Actividad Operativa</h3><div class="space-y-2">'+
+      '<select id="naa-area" class="w-full border rounded-lg px-3 py-2"></select>'+
+      '<input id="naa-codigo" placeholder="Código AOI" class="w-full border rounded-lg px-3 py-2">'+
+      '<input id="naa-nombre" placeholder="Nombre" class="w-full border rounded-lg px-3 py-2">'+
+      '<div class="grid grid-cols-2 gap-2"><input id="naa-um" placeholder="Unidad" class="border rounded-lg px-3 py-2">'+
+      '<select id="naa-oei" class="border rounded-lg px-3 py-2"></select></div>'+
+      '<select id="naa-aei" class="w-full border rounded-lg px-3 py-2"></select>'+
+      '<button id="btn-add-aoi" class="bg-green-700 text-white text-sm px-4 py-2 rounded-lg">Guardar actividad</button></div></div></div>'+
+      '<div class="bg-white rounded-xl shadow overflow-x-auto"><table class="w-full text-sm">'+
+      '<thead class="bg-slate-800 text-white"><tr><th class="p-2 text-left">Área</th><th class="p-2 text-left">Cód. AOI</th><th class="p-2 text-left">Actividad</th><th class="p-2">Estado</th><th class="p-2">Acción</th></tr></thead>'+
+      '<tbody id="tabla-admin" class="divide-y"></tbody></table></div>';
+    main.appendChild(s);
+    var ba2=document.getElementById('btn-add-area'); if(ba2) ba2.addEventListener('click', admAddArea);
+    var ba3=document.getElementById('btn-add-aoi'); if(ba3) ba3.addEventListener('click', admAddAOI);
+    var ba4=document.getElementById('btn-nuevo-anio'); if(ba4) ba4.addEventListener('click', admAbrirAnio);
+    var ba5=document.getElementById('adm-anio'); if(ba5) ba5.addEventListener('change', function(){ admRenderTabla(); });
+  }
+  document.querySelectorAll('[data-tab]').forEach(function(b){
+    b.addEventListener('click', function(){ var a=document.getElementById('tab-admin'); if(a) a.classList.add('hidden'); });
+  });
+}
+document.addEventListener('DOMContentLoaded', instalarAdmin);
+
+async function admInit(){
+  await admCargarSelects();
+  admRenderTabla();
+}
+async function admCargarSelects(){
+  var oe=await supabase.from('oeis').select('*').order('codigo');
+  var ae=await supabase.from('aeis').select('*').order('codigo');
+  var cc=document.getElementById('na-cc'); if(cc) cc.innerHTML=CENTROS.map(function(c){return '<option value="'+c.id+'">'+c.codigo+' — '+c.nombre+'</option>';}).join('');
+  var ar=document.getElementById('naa-area'); if(ar) ar.innerHTML=AREAS.map(function(a){return '<option value="'+a.id+'">'+a.nombre+'</option>';}).join('');
+  var o=document.getElementById('naa-oei'); if(o) o.innerHTML=(oe.data||[]).map(function(x){return '<option value="'+x.codigo+'">'+x.codigo+'</option>';}).join('');
+  var a2=document.getElementById('naa-aei'); if(a2) a2.innerHTML=(ae.data||[]).map(function(x){return '<option value="'+x.codigo+'">'+x.codigo+'</option>';}).join('');
+}
+async function admRenderTabla(){
+  var anio=parseInt((document.getElementById('adm-anio')||{}).value||'2026',10);
+  var r=await supabase.from('actividades_operativas').select('*').eq('anio',anio).order('codigo');
+  var tb=document.getElementById('tabla-admin'); if(!tb) return;
+  tb.innerHTML=(r.data||[]).map(function(x){
+    var inactivo=(x.activo===false);
+    return '<tr class="hover:bg-slate-50"><td class="p-2">'+(nombreArea(x.area_id)||'')+'</td><td class="p-2 font-mono text-xs">'+x.codigo+'</td><td class="p-2">'+x.nombre+'</td>'+
+      '<td class="p-2 text-center">'+(inactivo?'<span class="sem-rojo px-2 py-1 rounded-full text-xs font-bold">INACTIVO</span>':'<span class="sem-verde px-2 py-1 rounded-full text-xs font-bold">ACTIVO</span>')+'</td>'+
+      '<td class="p-2"><button class="bg-amber-600 text-white text-xs px-2 py-1 rounded" onclick="admToggleAOI(\''+x.id+'\','+(inactivo?'true':'false')+')">'+(inactivo?'✅ Activar':'🚫 Desactivar')+'</button></td></tr>';
+  }).join('');
+}
+async function admToggleAOI(id, estabaInactivo){
+  await supabase.from('actividades_operativas').update({activo: estabaInactivo?true:false}).eq('id',id);
+  admRenderTabla();
+}
+async function admAddArea(){
+  var cc=document.getElementById('na-cc').value;
+  var nom=(document.getElementById('na-nombre').value||'').trim().toUpperCase();
+  if(!nom){ alert('Ingrese el nombre del área'); return; }
+  var r=await supabase.from('areas').insert({centro_costo_id:cc, nombre:nom});
+  if(r.error){ alert('Error: '+r.error.message); return; }
+  document.getElementById('na-nombre').value='';
+  admCargarSelects(); alert('Área creada.');
+}
+async function admAddAOI(){
+  var anio=parseInt((document.getElementById('adm-anio')||{}).value||'2026',10);
+  var reg={ area_id:document.getElementById('naa-area').value,
+    codigo:(document.getElementById('naa-codigo').value||'').trim(),
+    nombre:(document.getElementById('naa-nombre').value||'').trim(),
+    unidad_medida:(document.getElementById('naa-um').value||'').trim(),
+    oei:document.getElementById('naa-oei').value, aei:document.getElementById('naa-aei').value,
+    anio:anio, activo:true };
+  if(!reg.codigo||!reg.nombre){ alert('Código y nombre son obligatorios'); return; }
+  var r=await supabase.from('actividades_operativas').insert(reg);
+  if(r.error){ alert('Error: '+r.error.message); return; }
+  document.getElementById('naa-codigo').value=''; document.getElementById('naa-nombre').value='';
+  admRenderTabla(); alert('Actividad creada.');
+}
+async function admAbrirAnio(){
+  var anio=parseInt((document.getElementById('adm-anio')||{}).value||'2026',10);
+  var nuevo=anio+1;
+  if(!confirm('Se abrirá el año '+nuevo+' copiando el catálogo del año '+anio+'. ¿Continuar?')) return;
+  var r=await supabase.from('actividades_operativas').select('*').eq('anio',anio);
+  var copias=(r.data||[]).map(function(x){ return { area_id:x.area_id, codigo:x.codigo, nombre:x.nombre, unidad_medida:x.unidad_medida, oei:x.oei, aei:x.aei, anio:nuevo, activo:true }; });
+  if(copias.length) await supabase.from('actividades_operativas').insert(copias);
+  await supabase.from('anios').upsert({anio:nuevo},{onConflict:'anio'});
+  document.getElementById('adm-anio').value=nuevo;
+  admRenderTabla(); alert('Año '+nuevo+' abierto con '+copias.length+' actividades.');
+}
