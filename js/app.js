@@ -629,3 +629,133 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 800);
 });
+// ============ MÓDULO ADMINISTRACIÓN (Catálogo + Multianualidad) ============
+var ADM_ANIO = parseInt(localStorage.getItem('poi_anio') || '2026', 10);
+var ADM_OEIS = [], ADM_AEIS = [];
+
+document.addEventListener('DOMContentLoaded', function () {
+  var btn = document.querySelector('[data-tab="admin"]');
+  if (btn) btn.addEventListener('click', function () {
+    if (PERFIL && PERFIL.rol === 'admin') admInit();
+  });
+});
+
+async function admInit() {
+  var oe = await supabase.from('oeis').select('*').order('codigo');
+  var ae = await supabase.from('aeis').select('*').order('codigo');
+  ADM_OEIS = oe.data || []; ADM_AEIS = ae.data || [];
+  admBuild(); admRenderTabla();
+}
+
+function admBuild() {
+  var sec = document.getElementById('tab-admin'); if (!sec) return;
+  sec.innerHTML =
+    '<div class="bg-white rounded-xl shadow p-6 mb-4 flex flex-wrap items-center justify-between gap-3">' +
+    '<h2 class="text-lg font-bold text-slate-800">🗂️ Administración del Catálogo</h2>' +
+    '<div class="flex items-center gap-2"><span class="text-sm text-slate-600">Año:</span>' +
+    '<input id="adm-anio" type="number" value="' + ADM_ANIO + '" class="border rounded-lg px-3 py-2 w-28">' +
+    '<button onclick="admCambiarAnio()" class="bg-slate-600 text-white text-sm px-4 py-2 rounded-lg">Cargar año</button>' +
+    '<button onclick="admAbrirAnio()" class="bg-blue-700 text-white text-sm px-4 py-2 rounded-lg">➕ Abrir año nuevo (copiar catálogo)</button></div></div>' +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">' +
+    '<div class="bg-white rounded-xl shadow p-6"><h3 class="font-bold text-slate-700 mb-3">➕ Agregar Área</h3><div class="space-y-2">' +
+    '<select id="na-cc" class="w-full border rounded-lg px-3 py-2">' + CENTROS.map(function (c) { return '<option value="' + c.id + '">' + c.codigo + ' — ' + c.nombre + '</option>'; }).join('') + '</select>' +
+    '<input id="na-nombre" placeholder="Nombre del área" class="w-full border rounded-lg px-3 py-2">' +
+    '<button onclick="admAddArea()" class="bg-green-700 text-white text-sm px-4 py-2 rounded-lg">Guardar área</button></div></div>' +
+    '<div class="bg-white rounded-xl shadow p-6"><h3 class="font-bold text-slate-700 mb-3">➕ Agregar Actividad Operativa (AOI)</h3><div class="space-y-2">' +
+    '<select id="naa-area" class="w-full border rounded-lg px-3 py-2">' + AREAS.map(function (a) { return '<option value="' + a.id + '">' + a.nombre + '</option>'; }).join('') + '</select>' +
+    '<input id="naa-codigo" placeholder="Código AOI (ej. AOI00108200000)" class="w-full border rounded-lg px-3 py-2">' +
+    '<input id="naa-nombre" placeholder="Nombre de la actividad" class="w-full border rounded-lg px-3 py-2">' +
+    '<div class="grid grid-cols-2 gap-2"><input id="naa-um" placeholder="Unidad de medida" class="border rounded-lg px-3 py-2">' +
+    '<select id="naa-oei" class="border rounded-lg px-3 py-2">' + ADM_OEIS.map(function (o) { return '<option value="' + o.codigo + '">' + o.codigo + '</option>'; }).join('') + '</select></div>' +
+    '<select id="naa-aei" class="w-full border rounded-lg px-3 py-2">' + ADM_AEIS.map(function (a) { return '<option value="' + a.codigo + '">' + a.codigo + '</option>'; }).join('') + '</select>' +
+    '<button onclick="admAddAOI()" class="bg-green-700 text-white text-sm px-4 py-2 rounded-lg">Guardar actividad</button></div></div></div>' +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">' +
+    '<div class="bg-white rounded-xl shadow p-6"><h3 class="font-bold text-slate-700 mb-3">➕ Nuevo OEI</h3><div class="space-y-2">' +
+    '<input id="noei-cod" placeholder="Código (ej. OEI.08)" class="w-full border rounded-lg px-3 py-2">' +
+    '<input id="noei-nom" placeholder="Nombre del OEI" class="w-full border rounded-lg px-3 py-2">' +
+    '<button onclick="admAddOEI()" class="bg-slate-700 text-white text-sm px-4 py-2 rounded-lg">Guardar OEI</button></div></div>' +
+    '<div class="bg-white rounded-xl shadow p-6"><h3 class="font-bold text-slate-700 mb-3">➕ Nueva AEI</h3><div class="space-y-2">' +
+    '<input id="naei-cod" placeholder="Código (ej. AEI.06.06)" class="w-full border rounded-lg px-3 py-2">' +
+    '<input id="naei-nom" placeholder="Nombre de la AEI" class="w-full border rounded-lg px-3 py-2">' +
+    '<button onclick="admAddAEI()" class="bg-slate-700 text-white text-sm px-4 py-2 rounded-lg">Guardar AEI</button></div></div></div>' +
+    '<div class="bg-white rounded-xl shadow overflow-x-auto"><table class="w-full text-sm">' +
+    '<thead class="bg-slate-800 text-white"><tr><th class="p-2 text-left">Área</th><th class="p-2 text-left">Cód. AOI</th><th class="p-2 text-left">Actividad</th><th class="p-2">UM</th><th class="p-2">OEI/AEI</th><th class="p-2">Estado</th><th class="p-2">Acción</th></tr></thead>' +
+    '<tbody id="tabla-admin" class="divide-y"></tbody></table></div>';
+}
+
+async function admRenderTabla() {
+  var res = await supabase.from('actividades_operativas').select('*').eq('anio', ADM_ANIO).order('codigo');
+  var rows = (res.data || []).map(function (x) {
+    var inactivo = x.activo === false;
+    return '<tr class="hover:bg-slate-50"><td class="p-2">' + (nombreArea(x.area_id) || '') + '</td>' +
+      '<td class="p-2 font-mono text-xs">' + x.codigo + '</td><td class="p-2">' + x.nombre + '</td>' +
+      '<td class="p-2">' + (x.unidad_medida || '') + '</td><td class="p-2 text-xs">' + (x.oei || '') + ' / ' + (x.aei || '') + '</td>' +
+      '<td class="p-2 text-center">' + (inactivo ? '<span class="sem-rojo px-2 py-1 rounded-full text-xs font-bold">INACTIVO</span>' : '<span class="sem-verde px-2 py-1 rounded-full text-xs font-bold">ACTIVO</span>') + '</td>' +
+      '<td class="p-2"><button onclick="admToggleAOI(\'' + x.id + '\',' + (inactivo ? 'true' : 'false') + ')" class="bg-amber-600 text-white text-xs px-2 py-1 rounded">' + (inactivo ? '✅ Activar' : '🚫 Desactivar') + '</button></td></tr>';
+  }).join('');
+  var tb = document.getElementById('tabla-admin');
+  if (tb) tb.innerHTML = rows || '<tr><td colspan="7" class="p-4 text-center text-slate-500">Sin actividades para el año ' + ADM_ANIO + '.</td></tr>';
+}
+
+function admCambiarAnio() {
+  var v = parseInt(document.getElementById('adm-anio').value, 10); if (!v) return;
+  ADM_ANIO = v; localStorage.setItem('poi_anio', String(v)); admRenderTabla();
+}
+
+async function admAbrirAnio() {
+  var nuevo = ADM_ANIO + 1;
+  if (!confirm('Se abrirá el año ' + nuevo + ' copiando el catálogo de actividades del año ' + ADM_ANIO + '. ¿Continuar?')) return;
+  var res = await supabase.from('actividades_operativas').select('*').eq('anio', ADM_ANIO);
+  var copias = (res.data || []).map(function (r) {
+    return { area_id: r.area_id, codigo: r.codigo, nombre: r.nombre, unidad_medida: r.unidad_medida, activo: true, anio: nuevo, oei: r.oei, aei: r.aei, codigo_registro: r.codigo_registro, responsable: r.responsable, pia_bloqueado: false };
+  });
+  if (copias.length) await supabase.from('actividades_operativas').insert(copias);
+  await supabase.from('anios').upsert({ anio: nuevo }, { onConflict: 'anio' });
+  alert('Año ' + nuevo + ' abierto con ' + copias.length + ' actividades.');
+  ADM_ANIO = nuevo; localStorage.setItem('poi_anio', String(nuevo)); location.reload();
+}
+
+async function admToggleAOI(id, estabaInactivo) {
+  await supabase.from('actividades_operativas').update({ activo: estabaInactivo ? true : false }).eq('id', id);
+  admRenderTabla();
+}
+
+async function admAddArea() {
+  var cc = document.getElementById('na-cc').value;
+  var nom = (document.getElementById('na-nombre').value || '').trim().toUpperCase();
+  if (!nom) { alert('Ingrese el nombre del área'); return; }
+  var r = await supabase.from('areas').insert({ centro_costo_id: cc, nombre: nom });
+  if (r.error) { alert('Error: ' + r.error.message); return; }
+  alert('Área creada. Se recargará para actualizar.'); location.reload();
+}
+
+async function admAddAOI() {
+  var reg = { area_id: document.getElementById('naa-area').value,
+    codigo: (document.getElementById('naa-codigo').value || '').trim(),
+    nombre: (document.getElementById('naa-nombre').value || '').trim(),
+    unidad_medida: (document.getElementById('naa-um').value || '').trim(),
+    oei: document.getElementById('naa-oei').value, aei: document.getElementById('naa-aei').value,
+    anio: ADM_ANIO, activo: true };
+  if (!reg.codigo || !reg.nombre) { alert('Código y nombre son obligatorios'); return; }
+  var r = await supabase.from('actividades_operativas').insert(reg);
+  if (r.error) { alert('Error: ' + r.error.message); return; }
+  alert('Actividad creada. Se recargará para actualizar.'); location.reload();
+}
+
+async function admAddOEI() {
+  var cod = (document.getElementById('noei-cod').value || '').trim().toUpperCase();
+  var nom = (document.getElementById('noei-nom').value || '').trim();
+  if (!cod || !nom) { alert('Código y nombre son obligatorios'); return; }
+  var r = await supabase.from('oeis').insert({ codigo: cod, nombre: nom });
+  if (r.error) { alert('Error: ' + r.error.message); return; }
+  alert('OEI creado.'); admInit();
+}
+
+async function admAddAEI() {
+  var cod = (document.getElementById('naei-cod').value || '').trim().toUpperCase();
+  var nom = (document.getElementById('naei-nom').value || '').trim();
+  if (!cod || !nom) { alert('Código y nombre son obligatorios'); return; }
+  var r = await supabase.from('aeis').insert({ codigo: cod, nombre: nom });
+  if (r.error) { alert('Error: ' + r.error.message); return; }
+  alert('AEI creada.'); admInit();
+}
