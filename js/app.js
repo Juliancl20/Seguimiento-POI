@@ -876,3 +876,101 @@ async function admAbrirAnio(){
   document.getElementById('adm-anio').value=nuevo;
   admRenderTabla(); alert('Año '+nuevo+' abierto con '+copias.length+' actividades.');
 }
+// ================= TABLERO DIRECTIVO (dinámico) =================
+let CH_T = {};
+function cargarChartJS(cb){ if(window.Chart) return cb();
+  const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/chart.js@4'; s.onload=cb; document.head.appendChild(s); }
+function animar(el, valor, dec, suf){ const dur=800,t0=performance.now();
+  (function step(t){ const k=Math.min(1,(t-t0)/dur); el.textContent=(valor*k).toFixed(dec)+(suf||''); if(k<1) requestAnimationFrame(step); })(t0); }
+function inyectarTablero(){
+  const nav=document.querySelector('nav');
+  if(nav && !document.getElementById('btn-tab-tablero')){
+    const b=document.createElement('button'); b.id='btn-tab-tablero';
+    b.className='px-4 py-3 text-sm text-slate-600 whitespace-nowrap'; b.textContent='📊 Tablero';
+    nav.insertBefore(b, document.querySelector('[data-tab="reportes"]'));
+    b.addEventListener('click', mostrarTablero);
+  }
+  if(!document.getElementById('tab-tablero')){
+    const s=document.createElement('section'); s.id='tab-tablero'; s.className='hidden';
+    document.querySelector('main').appendChild(s);
+  }
+  document.querySelectorAll('[data-tab]').forEach(b=> b.addEventListener('click', ()=>{
+    document.getElementById('tab-tablero').classList.add('hidden');
+    document.getElementById('btn-tab-tablero').classList.remove('tab-activa'); }));
+}
+function mostrarTablero(){
+  ['inicio','registro','modificaciones','usuarios','admin','reportes'].forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));
+  document.getElementById('tab-tablero').classList.remove('hidden');
+  document.querySelectorAll('[data-tab]').forEach(b=>b.classList.remove('tab-activa'));
+  document.getElementById('btn-tab-tablero').classList.add('tab-activa');
+  cargarChartJS(()=>renderTablero(''));
+}
+async function renderTablero(ccF){
+  const sec=document.getElementById('tab-tablero');
+  const anio=parseInt(localStorage.getItem('poi_anio')||'2026',10);
+  const [c,a,o,p,e,m]=await Promise.all([
+    supabase.from('centros_costos').select('*').order('codigo'),
+    supabase.from('areas').select('*'),
+    supabase.from('actividades_operativas').select('*').eq('anio',anio),
+    supabase.from('programacion_metas').select('*').eq('anio',anio),
+    supabase.from('ejecucion_mensual').select('*').eq('anio',anio),
+    supabase.from('modificaciones_mensuales_cc').select('*').eq('anio',anio)
+  ]);
+  const CENT=c.data||[], ARE=a.data||[], AO=o.data||[], PROG=p.data||[], EJEC=e.data||[], MODS=m.data||[];
+  let aois=AO; if(ccF){ const ids=ARE.filter(x=>x.centro_costo_id===ccF).map(x=>x.id); aois=AO.filter(x=>ids.includes(x.area_id)); }
+  const aoiIds=new Set(aois.map(x=>x.id));
+  const prog=PROG.filter(x=>aoiIds.has(x.actividad_id)), ejec=EJEC.filter(x=>aoiIds.has(x.actividad_id));
+  const M=[...Array(12).keys()].map(i=>i+1);
+  const sF=(arr,campo,mes)=>arr.filter(x=>x.mes===mes).reduce((s,x)=>s+Number(x[campo]||0),0);
+  const pFin=M.map(mo=>sF(prog,'meta_financiera',mo)), eFin=M.map(mo=>sF(ejec,'ejecucion_financiera',mo));
+  const pFis=M.map(mo=>sF(prog,'meta_fisica',mo)), eFis=M.map(mo=>sF(ejec,'ejecucion_fisica',mo));
+  const tPF=pFin.reduce((s,x)=>s+x,0), tEF=eFin.reduce((s,x)=>s+x,0);
+  const tPFi=pFis.reduce((s,x)=>s+x,0), tEFi=eFis.reduce((s,x)=>s+x,0);
+  const pctF=tPF>0?(tEF/tPF*100):0, pctFi=tPFi>0?(tEFi/tPFi*100):0;
+  const sem=v=>v>=90?'#2D7A4E':v>=75?'#C9A350':'#B33B3B';
+  sec.innerHTML=`
+   <div class="bg-white rounded-xl shadow p-5 mb-4 flex flex-wrap items-center justify-between gap-3">
+     <h2 class="text-lg font-bold text-slate-800">📊 Tablero Directivo — POI ${anio}</h2>
+     <select id="tab-cc" class="border rounded-lg px-3 py-2">
+       <option value="">Todos los Centros de Costo</option>
+       ${CENT.map(x=>`<option value="${x.id}" ${x.id===ccF?'selected':''}>${x.codigo} — ${x.nombre}</option>`).join('')}
+     </select>
+   </div>
+   <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+     <div class="bg-white rounded-xl shadow p-5"><p class="text-xs text-slate-500">PIM Programado</p><p class="text-xl font-bold text-slate-800">S/ ${fmt(tPF)}</p></div>
+     <div class="bg-white rounded-xl shadow p-5"><p class="text-xs text-slate-500">Ejecución Financiera</p><p class="text-xl font-bold" style="color:${sem(pctF)}" id="k-fin">0%</p><div class="h-1.5 bg-slate-200 rounded mt-2"><div class="h-1.5 rounded" style="width:${Math.min(100,pctF)}%;background:${sem(pctF)}"></div></div></div>
+     <div class="bg-white rounded-xl shadow p-5"><p class="text-xs text-slate-500">Meta Física</p><p class="text-xl font-bold text-slate-800">${fmt(tPFi)}</p></div>
+     <div class="bg-white rounded-xl shadow p-5"><p class="text-xs text-slate-500">Avance Físico</p><p class="text-xl font-bold" style="color:${sem(pctFi)}" id="k-fis">0%</p><div class="h-1.5 bg-slate-200 rounded mt-2"><div class="h-1.5 rounded" style="width:${Math.min(100,pctFi)}%;background:${sem(pctFi)}"></div></div></div>
+   </div>
+   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+     <div class="bg-white rounded-xl shadow p-5"><p class="font-semibold mb-2 text-slate-700">💰 Financiero: Programado vs Ejecutado</p><canvas id="ch-fin"></canvas></div>
+     <div class="bg-white rounded-xl shadow p-5"><p class="font-semibold mb-2 text-slate-700">📊 Físico: Programado vs Ejecutado</p><canvas id="ch-fis"></canvas></div>
+   </div>
+   <div class="bg-white rounded-xl shadow p-5"><p class="font-semibold mb-3 text-slate-700">🏢 Resumen por Centro de Costo</p>
+     <table class="w-full text-sm"><thead><tr class="bg-slate-800 text-white"><th class="p-2 text-left">Centro de Costo</th><th class="p-2 text-right">PIM</th><th class="p-2 text-right">Ejecutado</th><th class="p-2">% Fin.</th><th class="p-2">% Fís.</th></tr></thead><tbody id="tb-cc"></tbody></table>
+   </div>`;
+  animar(document.getElementById('k-fin'), pctF, 1, '%');
+  animar(document.getElementById('k-fis'), pctFi, 1, '%');
+  document.getElementById('tab-cc').addEventListener('change', e=>renderTablero(e.target.value));
+  Object.values(CH_T).forEach(x=>x&&x.destroy()); CH_T={};
+  const MB=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  CH_T.fin=new Chart(document.getElementById('ch-fin'),{type:'bar',data:{labels:MB,datasets:[
+    {label:'Programado',data:pFin,backgroundColor:'#1E2A3A'},{label:'Ejecutado',data:eFin,backgroundColor:'#C9A350'}]},
+    options:{responsive:true,scales:{y:{ticks:{callback:v=>'S/ '+(v/1000).toFixed(0)+'K'}}}}});
+  CH_T.fis=new Chart(document.getElementById('ch-fis'),{type:'bar',data:{labels:MB,datasets:[
+    {label:'Programado',data:pFis,backgroundColor:'#1E2A3A'},{label:'Ejecutado',data:eFis,backgroundColor:'#2D7A4E'}]},
+    options:{responsive:true}});
+  document.getElementById('tb-cc').innerHTML=CENT.map(cc=>{
+    const ids=ARE.filter(x=>x.centro_costo_id===cc.id).map(x=>x.id);
+    const ao=AO.filter(x=>ids.includes(x.area_id)).map(x=>x.id);
+    const pf=PROG.filter(x=>ao.includes(x.actividad_id)).reduce((s,x)=>s+Number(x.meta_financiera||0),0);
+    const ef=EJEC.filter(x=>ao.includes(x.actividad_id)).reduce((s,x)=>s+Number(x.ejecucion_financiera||0),0);
+    const pfi=PROG.filter(x=>ao.includes(x.actividad_id)).reduce((s,x)=>s+Number(x.meta_fisica||0),0);
+    const efi=EJEC.filter(x=>ao.includes(x.actividad_id)).reduce((s,x)=>s+Number(x.ejecucion_financiera!==undefined?x.ejecucion_fisica:0),0);
+    const pc=pf>0?ef/pf*100:0, pcF=pfi>0?efi/pfi*100:0;
+    return `<tr class="hover:bg-slate-50"><td class="p-2">${cc.codigo} — ${cc.nombre}</td><td class="p-2 text-right">S/ ${fmt(pf)}</td><td class="p-2 text-right">S/ ${fmt(ef)}</td>
+      <td class="p-2"><div class="flex items-center gap-2"><div class="flex-1 h-1.5 bg-slate-200 rounded"><div class="h-1.5 rounded" style="width:${Math.min(100,pc)}%;background:${sem(pc)}"></div></div><span class="text-xs font-bold" style="color:${sem(pc)}">${pc.toFixed(1)}%</span></div></td>
+      <td class="p-2"><div class="flex items-center gap-2"><div class="flex-1 h-1.5 bg-slate-200 rounded"><div class="h-1.5 rounded" style="width:${Math.min(100,pcF)}%;background:${sem(pcF)}"></div></div><span class="text-xs font-bold" style="color:${sem(pcF)}">${pcF.toFixed(1)}%</span></div></td></tr>`;
+  }).join('');
+}
+document.addEventListener('DOMContentLoaded', inyectarTablero);
