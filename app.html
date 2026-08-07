@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seguimiento POI</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   .tab-activa { border-bottom: 3px solid #1d4ed8; color: #1d4ed8; font-weight: 700; }
@@ -54,6 +55,12 @@
   <!-- SEGUIMIENTO MENSUAL -->
   <section id="tab-registro" class="hidden">
     <div class="bg-white rounded-xl shadow p-6">
+      <div class="flex justify-end mb-3">
+  <label class="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 text-white text-sm px-4 py-2 rounded-lg cursor-pointer">
+    📥 Importar Informe Mensual (Word)
+    <input type="file" id="file-word" accept=".docx" class="hidden">
+  </label>
+</div>
       <h2 class="text-lg font-bold text-slate-800 mb-4">📝 Seguimiento Mensual</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
         <div><label class="text-sm font-medium text-slate-600">Centro de Costos</label><select id="sel-cc-reg" class="w-full border rounded-lg px-3 py-2"></select></div>
