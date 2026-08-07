@@ -492,3 +492,140 @@ function exportarPDF() {
   }
   window.print();
 }
+// ============ GUÍA 6: WORD (IMPORTAR INFORME / EXPORTAR EJECUTIVO) ============
+const MES_IDX = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,setiembre:9,septiembre:9,octubre:10,noviembre:11,diciembre:12};
+
+function parsearInformeWord(texto){
+  const lineas = texto.split(/\r?\n/);
+  const comments = {}, modifs = {};
+  let curCC=null, curSection=null, curAOI=null, curMes=null, buf=[];
+  const limpiar = s => s.replace(/\s+/g,' ').trim();
+  const flush = () => {
+    const txt = buf.join(' ').trim(); buf=[];
+    if(!txt) return;
+    if(curSection==='modificaciones'){ if(curCC&&curMes) (modifs[curCC]=modifs[curCC]||{})[curMes]=txt; }
+    else if(['logros','limitaciones','medidas'].includes(curSection) && curAOI && curMes){
+      const c=(comments[curAOI]=comments[curAOI]||{});
+      (c[curMes]=c[curMes]||{})[curSection]=txt;
+    }
+  };
+  for(const raw of lineas){
+    const s=limpiar(raw); if(!s) continue;
+    const mcc=s.match(/CENTRO DE COSTOS?\.?\s*(03\.07(?:\.\d+)?)/i);
+    if(mcc){flush(); curCC=mcc[1]; curSection=null; curAOI=null; curMes=null; continue;}
+    if(/PRINCIPALES LOGROS/i.test(s)){flush(); curSection='logros'; curAOI=null; curMes=null; continue;}
+    if(/LIMITACIONES/i.test(s)){flush(); curSection='limitaciones'; curAOI=null; curMes=null; continue;}
+    if(/MEDIDAS ADOPTADAS/i.test(s)){flush(); curSection='medidas'; curAOI=null; curMes=null; continue;}
+    if(/\bMODIFICACIONES\b/i.test(s)){flush(); curSection='modificaciones'; curAOI=null; curMes=null; continue;}
+    if(/RESUMEN EJECUTIVO/i.test(s)){flush(); curSection='resumen'; continue;}
+    const ma=s.match(/AOI\s*([0-9]{8,})/i);
+    if(ma){flush(); curAOI='AOI'+ma[1]; curMes=null; continue;}
+    const low=s.toLowerCase();
+    if(MES_IDX[low] && s.length<=12){flush(); curMes=MES_IDX[low]; continue;}
+    if(['logros','limitaciones','medidas','modificaciones'].includes(curSection)) buf.push(s);
+  }
+  flush();
+  return {comments, modifs};
+}
+
+async function importarInformeWord(file){
+  const res = await window.mammoth.extractRawText({arrayBuffer: await file.arrayBuffer()});
+  const {comments, modifs} = parsearInformeWord(res.value||'');
+  const anio = parseInt(document.getElementById('reg-anio').value||'2026',10);
+  let nE=0, nM=0;
+  for(const aoi of Object.keys(comments)){
+    const {data: act} = await supabase.from('actividades_operativas').select('id').eq('codigo',aoi).eq('anio',anio).maybeSingle();
+    if(!act) continue;
+    for(const ms of Object.keys(comments[aoi])){
+      const mes=+ms, c=comments[aoi][ms];
+      const {data: ex} = await supabase.from('ejecucion_mensual').select('ejecucion_fisica, ejecucion_financiera').eq('actividad_id',act.id).eq('anio',anio).eq('mes',mes).maybeSingle();
+      await supabase.from('ejecucion_mensual').upsert({
+        actividad_id: act.id, anio, mes,
+        ejecucion_fisica: ex? ex.ejecucion_fisica:0,
+        ejecucion_financiera: ex? ex.ejecucion_financiera:0,
+        logros: c.logros||'', limitaciones: c.limitaciones||'', medidas_adoptadas: c.medidas||'',
+        estado:'enviado', usuario_id: SESION.user.id, fecha_envio: new Date().toISOString()
+      }, {onConflict:'actividad_id,anio,mes'});
+      nE++;
+    }
+  }
+  for(const cc of Object.keys(modifs)){
+    const {data: ccRow} = await supabase.from('centros_costos').select('id').eq('codigo',cc).maybeSingle();
+    if(!ccRow) continue;
+    for(const ms of Object.keys(modifs[cc])){
+      await supabase.from('modificaciones_mensuales_cc').upsert({
+        centro_costo_id: ccRow.id, anio, mes:+ms, comentario: modifs[cc][ms], usuario_id: SESION.user.id
+      }, {onConflict:'centro_costo_id,anio,mes'});
+      nM++;
+    }
+  }
+  alert('✅ Importación completada:\n• '+nE+' registros de seguimiento (logros/limitaciones/medidas)\n• '+nM+' notas de modificaciones por Centro de Costo.');
+  location.reload();
+}
+
+async function exportarWord(){
+  const anio=+document.getElementById('rep-anio').value;
+  const mes=+document.getElementById('rep-mes').value;
+  const {data: ejec} = await supabase.from('ejecucion_mensual')
+    .select('mes, logros, limitaciones, medidas_adoptadas, actividades_operativas(codigo, nombre, areas(nombre, centros_costos(codigo, nombre)))')
+    .eq('anio',anio).lte('mes',mes);
+  const {data: mods} = await supabase.from('modificaciones_mensuales_cc')
+    .select('mes, pia, pim, comentario, centros_costos(codigo, nombre)')
+    .eq('anio',anio).lte('mes',mes);
+  const porCC={};
+  (ejec||[]).forEach(r=>{
+    const act=r.actividades_operativas||{};
+    const cc=(act.areas&&act.areas.centros_costos)||{};
+    const cod=cc.codigo||'SIN CC';
+    if(!porCC[cod]) porCC[cod]={nombre: cc.nombre||'', aois:{}};
+    if(!porCC[cod].aois[act.codigo]) porCC[cod].aois[act.codigo]={nombre: act.nombre||'', meses:{}};
+    porCC[cod].aois[act.codigo].meses[r.mes]=r;
+  });
+  let html='<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>body{font-family:Arial;font-size:11pt;line-height:1.4}h1{font-size:16pt;text-align:center}h2{font-size:13pt;border-bottom:2px solid #C9A350;margin-top:14pt}h3{font-size:11pt;margin-top:10pt}p{text-align:justify}</style></head><body>';
+  html+='<h1>Resumen Ejecutivo de Seguimiento mensual del POI (al mes de '+MESES[mes]+')</h1>';
+  html+='<p style="text-align:center">PROGRAMA NUESTRAS CIUDADES<br>'+anio+'</p>';
+  Object.keys(porCC).sort().forEach(cod=>{
+    const g=porCC[cod];
+    html+='<p><u><b>CENTRO DE COSTOS '+cod+' - '+(g.nombre||'').toUpperCase()+'</b></u></p>';
+    html+='<h2>II. PRINCIPALES LOGROS</h2>';
+    Object.keys(g.aois).forEach(aoi=>{ const a=g.aois[aoi];
+      html+='<h3>'+aoi+': '+a.nombre+'</h3>';
+      Object.keys(a.meses).sort((x,y)=>x-y).forEach(m=>{ html+='<p><b>'+MESES[m]+'</b><br>'+(a.meses[m].logros||'Sin registro.')+'</p>'; });
+    });
+    html+='<h2>III. LIMITACIONES</h2>';
+    Object.keys(g.aois).forEach(aoi=>{ const a=g.aois[aoi];
+      html+='<h3>'+aoi+': '+a.nombre+'</h3>';
+      Object.keys(a.meses).sort((x,y)=>x-y).forEach(m=>{ html+='<p><b>'+MESES[m]+'</b><br>'+(a.meses[m].limitaciones||'Sin registro.')+'</p>'; });
+    });
+    html+='<h2>IV. MEDIDAS ADOPTADAS PARA CUMPLIR LAS METAS</h2>';
+    Object.keys(g.aois).forEach(aoi=>{ const a=g.aois[aoi];
+      html+='<h3>'+aoi+': '+a.nombre+'</h3>';
+      Object.keys(a.meses).sort((x,y)=>x-y).forEach(m=>{ html+='<p><b>'+MESES[m]+'</b><br>'+(a.meses[m].medidas_adoptadas||'Sin registro.')+'</p>'; });
+    });
+    html+='<h2>V. MODIFICACIONES</h2>';
+    (mods||[]).filter(x=>x.centros_costos&&x.centros_costos.codigo===cod).sort((a,b)=>a.mes-b.mes).forEach(x=>{
+      html+='<p><b>'+MESES[x.mes]+'</b><br>PIA S/ '+Number(x.pia||0).toLocaleString('es-PE',{minimumFractionDigits:2})+' | PIM S/ '+Number(x.pim||0).toLocaleString('es-PE',{minimumFractionDigits:2})+'<br>'+(x.comentario||'')+'</p>';
+    });
+  });
+  html+='</body></html>';
+  const blob=new Blob(['\ufeff',html],{type:'application/msword'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='Reporte_Ejecutivo_POI_'+anio+'_al_'+MESES[mes]+'.doc'; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const fw=document.getElementById('file-word');
+  if(fw) fw.addEventListener('change', e=>{ const f=e.target.files[0]; if(f) importarInformeWord(f); e.target.value=''; });
+  setTimeout(()=>{
+    const bx=document.getElementById('btn-excel');
+    const toolbar=bx? bx.parentElement : null;
+    if(toolbar && !document.getElementById('btn-word')){
+      const b=document.createElement('button');
+      b.id='btn-word'; b.className='bg-indigo-700 hover:bg-indigo-800 text-white font-semibold px-4 py-2.5 rounded-lg';
+      b.textContent='⬇️ Word';
+      b.addEventListener('click', exportarWord);
+      toolbar.appendChild(b);
+    }
+  }, 800);
+});
