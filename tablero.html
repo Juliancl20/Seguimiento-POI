@@ -9,113 +9,104 @@
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100 min-h-screen">
-
-<!-- ============ VISTA LOGIN ============ -->
-<div id="login-view" class="min-h-screen flex items-center justify-center p-4 hidden">
-  <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-    <div class="text-center mb-6">
-      <div class="text-4xl">📊</div>
-      <h1 class="text-2xl font-bold text-slate-800 mt-2">Tablero Directivo</h1>
-      <p class="text-slate-500 text-sm">Programa Nuestras Ciudades — MVCS</p>
-    </div>
-    <form id="form-login" class="space-y-4">
-      <div><label class="block text-sm font-medium text-slate-700 mb-1">Correo</label>
-        <input id="email" type="email" required class="w-full border rounded-lg px-3 py-2" placeholder="usuario@vivienda.gob.pe"></div>
-      <div><label class="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
-        <input id="password" type="password" required class="w-full border rounded-lg px-3 py-2"></div>
-      <button type="submit" class="w-full bg-blue-700 text-white rounded-lg py-2.5 font-semibold hover:bg-blue-800">Ingresar</button>
-      <p id="msg-login" class="text-sm text-red-600 text-center hidden"></p>
-    </form>
+<header class="bg-blue-900 text-white px-4 py-3 flex items-center justify-between">
+  <h1 class="font-bold text-lg">📊 Tablero Directivo — Programa Nuestras Ciudades</h1>
+  <a href="app.html" class="bg-blue-700 hover:bg-blue-600 text-sm px-3 py-1.5 rounded-lg">← Volver al aplicativo</a>
+</header>
+<main class="max-w-6xl mx-auto p-4">
+  <div class="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+    <div><label class="text-sm text-slate-600">Año</label><input id="anio" type="number" value="2026" class="border rounded-lg px-3 py-2"></div>
+    <div><label class="text-sm text-slate-600">Centro de Costos</label><select id="cc" class="border rounded-lg px-3 py-2"><option value="">Todos</option></select></div>
+    <button id="btn" class="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg">Actualizar</button>
   </div>
-</div>
-
-<!-- ============ VISTA TABLERO ============ -->
-<div id="tablero-view" class="hidden">
-  <header class="bg-blue-900 text-white px-4 py-3 flex items-center justify-between">
-    <h1 class="font-bold text-lg">📊 Tablero Directivo — Programa Nuestras Ciudades</h1>
-    <div class="flex gap-2">
-      <a href="app.html" class="bg-blue-700 hover:bg-blue-600 text-sm px-3 py-1.5 rounded-lg">← Volver al aplicativo</a>
-      <button id="btn-salir" class="bg-blue-700 hover:bg-blue-600 text-sm px-3 py-1.5 rounded-lg">Cerrar sesión</button>
-    </div>
-  </header>
-
-  <main class="max-w-6xl mx-auto p-4">
-    <div class="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
-      <div><label class="text-sm text-slate-600">Año</label>
-        <input id="anio" type="number" value="2026" class="border rounded-lg px-3 py-2"></div>
-      <div><label class="text-sm text-slate-600">Centro de Costo</label>
-        <select id="cc" class="border rounded-lg px-3 py-2"><option value="">Todos</option></select></div>
-      <button id="btn-actualizar" class="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg">Actualizar</button>
-    </div>
-
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-      <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">PIM Programado</p><p class="text-xl font-bold text-blue-700" id="k-pfin">—</p></div>
-      <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">Ejecución Financiera</p><p class="text-xl font-bold text-green-700" id="k-efin">—</p><p class="text-xs text-slate-500" id="k-pfin-pct"></p></div>
-      <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">Meta Física</p><p class="text-xl font-bold text-blue-700" id="k-pfis">—</p></div>
-      <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">Avance Físico</p><p class="text-xl font-bold text-green-700" id="k-efis">—</p><p class="text-xs text-slate-500" id="k-pfis-pct"></p></div>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-      <div class="bg-white rounded-xl shadow p-4"><p class="font-semibold mb-2">💰 Financiero: Programado vs Ejecutado</p><canvas id="chart-fin"></canvas></div>
-      <div class="bg-white rounded-xl shadow p-4"><p class="font-semibold mb-2">📊 Físico: Programado vs Ejecutado</p><canvas id="chart-fis"></canvas></div>
-    </div>
-
-    <div class="bg-white rounded-xl shadow p-4 mb-4"><p class="font-semibold mb-2">🎯 Avance financiero acumulado</p><canvas id="chart-donut" style="max-height:220px"></canvas></div>
-
-    <div class="bg-white rounded-xl shadow overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-800 text-white"><tr>
-          <th class="p-2 text-left">Centro de Costo</th><th class="p-2 text-right">Programado</th><th class="p-2 text-right">Ejecutado</th><th class="p-2">% Fin.</th><th class="p-2 text-right">Meta Fís.</th><th class="p-2 text-right">Avance Fís.</th><th class="p-2">% Fís.</th>
-        </tr></thead>
-        <tbody id="tabla-cc" class="divide-y"></tbody>
-      </table>
-    </div>
-  </main>
-</div>
-
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+    <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">PIA</p><p class="text-xl font-bold text-blue-700" id="k-pia">—</p></div>
+    <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">PIM</p><p class="text-xl font-bold text-blue-700" id="k-pim">—</p><p class="text-xs text-slate-500" id="k-var"></p></div>
+    <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">% Ejec. Financiera</p><p class="text-xl font-bold text-green-700" id="k-fin">—</p></div>
+    <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">% Avance Físico</p><p class="text-xl font-bold text-green-700" id="k-fis">—</p></div>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+    <div class="bg-white rounded-xl shadow p-4"><p class="font-semibold mb-2">💰 Financiero: Programado vs Ejecutado</p><canvas id="ch-fin"></canvas></div>
+    <div class="bg-white rounded-xl shadow p-4"><p class="font-semibold mb-2">📊 Físico: Programado vs Ejecutado</p><canvas id="ch-fis"></canvas></div>
+  </div>
+  <div class="bg-white rounded-xl shadow p-4 mb-4"><p class="font-semibold mb-2">🏢 PIM vs Ejecutado por Centro de Costos</p><canvas id="ch-cc"></canvas></div>
+  <div class="bg-white rounded-xl shadow overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-800 text-white"><tr>
+        <th class="p-2 text-left">Centro de Costos</th><th class="p-2 text-right">PIA</th><th class="p-2 text-right">PIM</th><th class="p-2 text-right">Ejec. Financiera</th><th class="p-2">% Fin.</th><th class="p-2">% Fís.</th>
+      </tr></thead>
+      <tbody id="tb" class="divide-y"></tbody>
+    </table>
+  </div>
+</main>
 <script>
-const sb = window.supabase.createClient('https://ylpglzsjgblsvjgxqatm.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscGdsenNqZ2Jsc3ZqZ3hxYXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NDY5NTcsImV4cCI6MjEwMTUyMjk1N30.T-PlhfwgQzLuf7zyfWauEEPCoAgKXHHwEfBnqcPPu2s');
 const MESES_ABR=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const sb=supabase.createClient('https://ylpglzsjgblsvjgxqatm.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscGdsenNqZ2Jsc3ZqZ3hxYXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NDY5NTcsImV4cCI6MjEwMTUyMjk1N30.T-PlhfwgQzLuf7zyfWauEEPCoAgKXHHwEfBnqcPPu2s');
 let CH={};
 const fmt=n=>(Number(n)||0).toLocaleString('es-PE',{maximumFractionDigits:0});
-function destruir(){Object.values(CH).forEach(c=>{try{c.destroy()}catch(e){}});CH={};}
-
 async function init(){
-  const { data:{ session } } = await sb.auth.getSession();
-  if(!session){ document.getElementById('login-view').classList.remove('hidden'); document.getElementById('tablero-view').classList.add('hidden'); return; }
-  document.getElementById('login-view').classList.add('hidden');
-  document.getElementById('tablero-view').classList.remove('hidden');
-  await cargarCCs(); await render();
-}
-document.getElementById('form-login').addEventListener('submit', async e=>{
-  e.preventDefault();
-  const msg=document.getElementById('msg-login'); msg.classList.add('hidden');
-  const { error } = await sb.auth.signInWithPassword({ email:document.getElementById('email').value, password:document.getElementById('password').value });
-  if(error){ msg.textContent='Credenciales incorrectas.'; msg.classList.remove('hidden'); } else { location.reload(); }
-});
-document.getElementById('btn-salir').addEventListener('click', async ()=>{ await sb.auth.signOut(); location.reload(); });
-document.getElementById('btn-actualizar').addEventListener('click', render);
-document.getElementById('cc').addEventListener('change', render);
-document.getElementById('anio').addEventListener('change', render);
-
-async function cargarCCs(){
-  const { data } = await sb.from('centros_costos').select('*').order('codigo');
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){location.href='index.html';return;}
+  const {data:ccs}=await sb.from('centros_costos').select('*').order('codigo');
   const sel=document.getElementById('cc');
-  sel.innerHTML='<option value="">Todos</option>'+(data||[]).map(c=>`<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`).join('');
+  (ccs||[]).forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.codigo+' — '+c.nombre;sel.appendChild(o);});
+  document.getElementById('btn').addEventListener('click',render);
+  await render();
 }
-async function datos(anio, ccId){
-  const [c,a,o,p,e]=await Promise.all([
-    sb.from('centros_costos').select('*').order('codigo'),
+async function render(){
+  const anio=+document.getElementById('anio').value;
+  const ccF=document.getElementById('cc').value;
+  const [a,o,p,e,m,ca]=await Promise.all([
     sb.from('areas').select('*'),
     sb.from('actividades_operativas').select('*').eq('anio',anio),
     sb.from('programacion_metas').select('*').eq('anio',anio),
-    sb.from('ejecucion_mensual').select('*').eq('anio',anio)
+    sb.from('ejecucion_mensual').select('*').eq('anio',anio),
+    sb.from('modificaciones_mensuales_cc').select('*').eq('anio',anio),
+    sb.from('centros_costos').select('*').order('codigo')
   ]);
-  return {ccs:c.data||[],areas:a.data||[],aois:o.data||[],prog:p.data||[],ejec:e.data||[],ccId};
+  let areas=a.data||[], aois=o.data||[];
+  if(ccF){areas=areas.filter(x=>x.centro_costo_id===ccF);const ids=new Set(areas.map(x=>x.id));aois=aois.filter(x=>ids.has(x.area_id));}
+  const aoiIds=new Set(aois.map(x=>x.id));
+  const prog=(p.data||[]).filter(x=>aoiIds.has(x.actividad_id));
+  const ejec=(e.data||[]).filter(x=>aoiIds.has(x.actividad_id));
+  const mods=m.data||[];
+  let pia=0,pim=0;
+  (ca.data||[]).forEach(c=>{ if(ccF&&c.id!==ccF)return;
+    const r=mods.filter(x=>x.centro_costo_id===c.id).sort((x,y)=>y.mes-x.mes);
+    if(r[0]){pia+=Number(r[0].pia)||0;pim+=Number(r[0].pim)||0;} });
+  const M=Array.from({length:12},(_,i)=>i+1);
+  const progFin=M.map(mo=>prog.filter(x=>x.mes===mo).reduce((s,x)=>s+Number(x.meta_financiera||0),0));
+  const ejecFin=M.map(mo=>ejec.filter(x=>x.mes===mo).reduce((s,x)=>s+Number(x.ejecucion_financiera||0),0));
+  const progFis=M.map(mo=>prog.filter(x=>x.mes===mo).reduce((s,x)=>s+Number(x.meta_fisica||0),0));
+  const ejecFis=M.map(mo=>ejec.filter(x=>x.mes===mo).reduce((s,x)=>s+Number(x.ejecucion_fisica||0),0));
+  const tEjecFin=ejecFin.reduce((s,x)=>s+x,0), tEjecFis=ejecFis.reduce((s,x)=>s+x,0), tProgFis=progFis.reduce((s,x)=>s+x,0);
+  const varPct=pia>0?((pim-pia)/pia*100):0;
+  document.getElementById('k-pia').textContent='S/ '+fmt(pia);
+  document.getElementById('k-pim').textContent='S/ '+fmt(pim);
+  document.getElementById('k-var').textContent='Variación '+(varPct>=0?'+':'')+varPct.toFixed(2)+'%';
+  document.getElementById('k-fin').textContent=pim>0?(tEjecFin/pim*100).toFixed(1)+'%':'—';
+  document.getElementById('k-fis').textContent=tProgFis>0?(tEjecFis/tProgFis*100).toFixed(1)+'%':'—';
+  Object.values(CH).forEach(c=>c&&c.destroy());CH={};
+  CH.fin=new Chart(document.getElementById('ch-fin'),{type:'bar',data:{labels:MESES_ABR,datasets:[{label:'Programado',data:progFin,backgroundColor:'#1E2A3A'},{label:'Ejecutado',data:ejecFin,backgroundColor:'#C9A350'}]},options:{responsive:true}});
+  CH.fis=new Chart(document.getElementById('ch-fis'),{type:'bar',data:{labels:MESES_ABR,datasets:[{label:'Programado',data:progFis,backgroundColor:'#1E2A3A'},{label:'Ejecutado',data:ejecFis,backgroundColor:'#2D7A4E'}]},options:{responsive:true}});
+  const rows=[],lbl=[],dPim=[],dEjec=[];
+  (ca.data||[]).forEach(c=>{ if(ccF&&c.id!==ccF)return;
+    const aIds=new Set((a.data||[]).filter(x=>x.centro_costo_id===c.id).map(x=>x.id));
+    const oIds=new Set((o.data||[]).filter(x=>aIds.has(x.area_id)).map(x=>x.id));
+    const eCC=(e.data||[]).filter(x=>oIds.has(x.actividad_id));
+    const pCC=(p.data||[]).filter(x=>oIds.has(x.actividad_id));
+    const r=mods.filter(x=>x.centro_costo_id===c.id).sort((x,y)=>y.mes-x.mes);
+    const cPia=r[0]?Number(r[0].pia)||0:0, cPim=r[0]?Number(r[0].pim)||0:0;
+    const cFin=eCC.reduce((s,x)=>s+Number(x.ejecucion_financiera||0),0);
+    const cFis=eCC.reduce((s,x)=>s+Number(x.ejecucion_fisica||0),0);
+    const cPF=pCC.reduce((s,x)=>s+Number(x.meta_fisica||0),0);
+    lbl.push(c.codigo);dPim.push(cPim);dEjec.push(cFin);
+    rows.push(`<tr class="hover:bg-slate-50"><td class="p-2">${c.codigo} — ${c.nombre}</td><td class="p-2 text-right">S/ ${fmt(cPia)}</td><td class="p-2 text-right">S/ ${fmt(cPim)}</td><td class="p-2 text-right">S/ ${fmt(cFin)}</td><td class="p-2 text-center">${cPim>0?(cFin/cPim*100).toFixed(1):'0.0'}%</td><td class="p-2 text-center">${cPF>0?(cFis/cPF*100).toFixed(1):'0.0'}%</td></tr>`);
+  });
+  CH.cc=new Chart(document.getElementById('ch-cc'),{type:'bar',data:{labels:lbl,datasets:[{label:'PIM',data:dPim,backgroundColor:'#1E2A3A'},{label:'Ejecutado',data:dEjec,backgroundColor:'#C9A350'}]},options:{responsive:true}});
+  document.getElementById('tb').innerHTML=rows.join('')||'<tr><td colspan="6" class="p-4 text-center text-slate-500">Sin datos.</td></tr>';
 }
-function filtrar(D){
-  let areas=D.areas; if(D.ccId) areas=areas.filter(x=>x.centro_costo_id===D.ccId);
-  const aIds=new Set(areas.map(x=>x.id));
-  const aois=D.aois.filter(x=>aIds.has(x.area_id));
-  const oIds=new Set(aois.map(x=>x.id));
-  return { prog:D.prog.filter(x=>oIds.has(x.actividad_id)), ejec
+init();
+</script>
+</body>
+</html>
