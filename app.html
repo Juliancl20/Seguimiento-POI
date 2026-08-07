@@ -28,6 +28,7 @@
   <button data-tab="registro" class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">📝 Seguimiento Mensual</button>
   <button data-tab="modificaciones" class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">💰 Modificaciones</button>
   <button data-tab="usuarios" class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">👥 Usuarios</button>
+  <button data-tab="admin" class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">🗂️ Administración</button>
   <button data-tab="reportes" class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">📈 Reportes</button>
 </nav>
 
@@ -141,7 +142,49 @@
       </table>
     </div>
   </section>
-
+<section id="tab-admin" class="hidden">
+  <div class="bg-white rounded-xl shadow p-6 mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h2 class="text-lg font-bold text-slate-800">🗂️ Administración del Catálogo</h2>
+    <div class="flex items-center gap-2">
+      <span class="text-sm text-slate-600">Año activo:</span>
+      <select id="adm-anio" class="border rounded-lg px-3 py-2"></select>
+      <button id="btn-nuevo-anio" class="bg-blue-700 text-white text-sm px-4 py-2 rounded-lg">➕ Abrir año nuevo (copiar catálogo)</button>
+    </div>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+    <div class="bg-white rounded-xl shadow p-6">
+      <h3 class="font-bold text-slate-700 mb-3">➕ Agregar Área</h3>
+      <div class="space-y-2">
+        <select id="na-cc" class="w-full border rounded-lg px-3 py-2"></select>
+        <input id="na-nombre" placeholder="Nombre del área" class="w-full border rounded-lg px-3 py-2">
+        <button id="btn-add-area" class="bg-green-700 text-white text-sm px-4 py-2 rounded-lg">Guardar área</button>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow p-6">
+      <h3 class="font-bold text-slate-700 mb-3">➕ Agregar Actividad Operativa</h3>
+      <div class="space-y-2">
+        <select id="naa-area" class="w-full border rounded-lg px-3 py-2"></select>
+        <input id="naa-codigo" placeholder="Código AOI" class="w-full border rounded-lg px-3 py-2">
+        <input id="naa-nombre" placeholder="Nombre de la actividad" class="w-full border rounded-lg px-3 py-2">
+        <div class="grid grid-cols-2 gap-2">
+          <input id="naa-um" placeholder="Unidad de medida" class="border rounded-lg px-3 py-2">
+          <select id="naa-oei" class="border rounded-lg px-3 py-2"></select>
+        </div>
+        <select id="naa-aei" class="w-full border rounded-lg px-3 py-2"></select>
+        <button id="btn-add-aoi" class="bg-green-700 text-white text-sm px-4 py-2 rounded-lg">Guardar actividad</button>
+      </div>
+    </div>
+  </div>
+  <div class="bg-white rounded-xl shadow overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-800 text-white"><tr>
+        <th class="p-2 text-left">Área</th><th class="p-2 text-left">Cód. AOI</th><th class="p-2 text-left">Actividad</th>
+        <th class="p-2">UM</th><th class="p-2">OEI/AEI</th><th class="p-2">Estado</th><th class="p-2">Acción</th>
+      </tr></thead>
+      <tbody id="tabla-admin" class="divide-y"></tbody>
+    </table>
+  </div>
+</section>
   <!-- REPORTES (se construye automáticamente) -->
   <section id="tab-reportes" class="hidden"></section>
 
