@@ -10,120 +10,112 @@
 </head>
 <body class="bg-slate-100 min-h-screen">
 
-<header class="bg-blue-900 text-white px-4 py-3 flex items-center justify-between">
-  <h1 class="font-bold text-lg">📊 Tablero Directivo — Programa Nuestras Ciudades</h1>
-  <a href="app.html" class="bg-blue-700 hover:bg-blue-600 text-sm px-3 py-1.5 rounded-lg">← Volver al aplicativo</a>
-</header>
-
-<main class="max-w-6xl mx-auto p-4">
-  <div class="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
-    <div><label class="text-sm text-slate-600">Año</label>
-      <input id="anio" type="number" value="2026" class="border rounded-lg px-3 py-2"></div>
-    <div><label class="text-sm text-slate-600">Centro de Costo</label>
-      <select id="cc" class="border rounded-lg px-3 py-2"><option value="">Todos</option></select></div>
-    <button onclick="render()" class="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg">Actualizar</button>
+<!-- ============ VISTA LOGIN ============ -->
+<div id="login-view" class="min-h-screen flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+    <div class="text-center mb-6">
+      <div class="text-4xl">📊</div>
+      <h1 class="text-2xl font-bold text-slate-800 mt-2">Tablero Directivo</h1>
+      <p class="text-slate-500 text-sm">Programa Nuestras Ciudades — MVCS</p>
+    </div>
+    <form id="form-login" class="space-y-4">
+      <div><label class="block text-sm font-medium text-slate-700 mb-1">Correo</label>
+        <input id="email" type="email" required class="w-full border rounded-lg px-3 py-2" placeholder="usuario@vivienda.gob.pe"></div>
+      <div><label class="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+        <input id="password" type="password" required class="w-full border rounded-lg px-3 py-2"></div>
+      <button type="submit" class="w-full bg-blue-700 text-white rounded-lg py-2.5 font-semibold hover:bg-blue-800">Ingresar</button>
+      <p id="msg-login" class="text-sm text-red-600 text-center hidden"></p>
+    </form>
   </div>
+</div>
 
-  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-    <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">PIM Programado</p><p class="text-xl font-bold text-blue-700" id="k-pfin">—</p></div>
-    <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">Ejecución Financiera</p><p class="text-xl font-bold text-green-700" id="k-efin">—</p><p class="text-xs text-slate-500" id="k-pfin-pct"></p></div>
-    <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">Meta Física</p><p class="text-xl font-bold text-blue-700" id="k-pfis">—</p></div>
-    <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">Avance Físico</p><p class="text-xl font-bold text-green-700" id="k-efis">—</p><p class="text-xs text-slate-500" id="k-pfis-pct"></p></div>
-  </div>
+<!-- ============ VISTA TABLERO ============ -->
+<div id="tablero-view" class="hidden">
+  <header class="bg-blue-900 text-white px-4 py-3 flex items-center justify-between">
+    <h1 class="font-bold text-lg">📊 Tablero Directivo — Programa Nuestras Ciudades</h1>
+    <div class="flex gap-2">
+      <a href="app.html" class="bg-blue-700 hover:bg-blue-600 text-sm px-3 py-1.5 rounded-lg">← Volver al aplicativo</a>
+      <button id="btn-salir" class="bg-blue-700 hover:bg-blue-600 text-sm px-3 py-1.5 rounded-lg">Cerrar sesión</button>
+    </div>
+  </header>
 
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-    <div class="bg-white rounded-xl shadow p-4"><p class="font-semibold mb-2">💰 Financiero: Programado vs Ejecutado</p><canvas id="chart-fin"></canvas></div>
-    <div class="bg-white rounded-xl shadow p-4"><p class="font-semibold mb-2">📊 Físico: Programado vs Ejecutado</p><canvas id="chart-fis"></canvas></div>
-  </div>
+  <main class="max-w-6xl mx-auto p-4">
+    <div class="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+      <div><label class="text-sm text-slate-600">Año</label>
+        <input id="anio" type="number" value="2026" class="border rounded-lg px-3 py-2"></div>
+      <div><label class="text-sm text-slate-600">Centro de Costo</label>
+        <select id="cc" class="border rounded-lg px-3 py-2"><option value="">Todos</option></select></div>
+      <button id="btn-actualizar" class="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg">Actualizar</button>
+    </div>
 
-  <div class="bg-white rounded-xl shadow p-4 mb-4"><p class="font-semibold mb-2">🎯 Avance financiero acumulado</p><canvas id="chart-donut" style="max-height:220px"></canvas></div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">PIM Programado</p><p class="text-xl font-bold text-blue-700" id="k-pfin">—</p></div>
+      <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">Ejecución Financiera</p><p class="text-xl font-bold text-green-700" id="k-efin">—</p><p class="text-xs text-slate-500" id="k-pfin-pct"></p></div>
+      <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">Meta Física</p><p class="text-xl font-bold text-blue-700" id="k-pfis">—</p></div>
+      <div class="bg-white rounded-xl shadow p-4"><p class="text-xs text-slate-500">Avance Físico</p><p class="text-xl font-bold text-green-700" id="k-efis">—</p><p class="text-xs text-slate-500" id="k-pfis-pct"></p></div>
+    </div>
 
-  <div class="bg-white rounded-xl shadow overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead class="bg-slate-800 text-white"><tr>
-        <th class="p-2 text-left">Centro de Costo</th><th class="p-2 text-right">Programado</th><th class="p-2 text-right">Ejecutado</th><th class="p-2">% Fin.</th><th class="p-2 text-right">Meta Fís.</th><th class="p-2 text-right">Avance Fís.</th><th class="p-2">% Fís.</th>
-      </tr></thead>
-      <tbody id="tabla-cc" class="divide-y"></tbody>
-    </table>
-  </div>
-</main>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+      <div class="bg-white rounded-xl shadow p-4"><p class="font-semibold mb-2">💰 Financiero: Programado vs Ejecutado</p><canvas id="chart-fin"></canvas></div>
+      <div class="bg-white rounded-xl shadow p-4"><p class="font-semibold mb-2">📊 Físico: Programado vs Ejecutado</p><canvas id="chart-fis"></canvas></div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-4 mb-4"><p class="font-semibold mb-2">🎯 Avance financiero acumulado</p><canvas id="chart-donut" style="max-height:220px"></canvas></div>
+
+    <div class="bg-white rounded-xl shadow overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-800 text-white"><tr>
+          <th class="p-2 text-left">Centro de Costo</th><th class="p-2 text-right">Programado</th><th class="p-2 text-right">Ejecutado</th><th class="p-2">% Fin.</th><th class="p-2 text-right">Meta Fís.</th><th class="p-2 text-right">Avance Fís.</th><th class="p-2">% Fís.</th>
+        </tr></thead>
+        <tbody id="tabla-cc" class="divide-y"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
 
 <script>
 const sb = window.supabase.createClient('https://ylpglzsjgblsvjgxqatm.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscGdsenNqZ2Jsc3ZqZ3hxYXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NDY5NTcsImV4cCI6MjEwMTUyMjk1N30.T-PlhfwgQzLuf7zyfWauEEPCoAgKXHHwEfBnqcPPu2s');
-const fmt = n => (Number(n)||0).toLocaleString('es-PE',{maximumFractionDigits:0});
-const MA = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-let CH = {};
-function destruir(){ Object.values(CH).forEach(c=>c&&c.destroy()); CH={}; }
+const MESES_ABR=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+let CH={};
+const fmt=n=>(Number(n)||0).toLocaleString('es-PE',{maximumFractionDigits:0});
+function destruir(){Object.values(CH).forEach(c=>{try{c.destroy()}catch(e){}});CH={};}
 
 async function init(){
   const { data:{ session } } = await sb.auth.getSession();
-  if(!session){ location.href='index.html'; return; }
-  const { data: ccs } = await sb.from('centros_costos').select('*').order('codigo');
-  const sel = document.getElementById('cc');
-  (ccs||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.codigo+' — '+c.nombre; sel.appendChild(o); });
-  await render();
+  if(!session){ document.getElementById('login-view').classList.remove('hidden'); document.getElementById('tablero-view').classList.add('hidden'); return; }
+  document.getElementById('login-view').classList.add('hidden');
+  document.getElementById('tablero-view').classList.remove('hidden');
+  await cargarCCs(); await render();
 }
+document.getElementById('form-login').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const msg=document.getElementById('msg-login'); msg.classList.add('hidden');
+  const { error } = await sb.auth.signInWithPassword({ email:document.getElementById('email').value, password:document.getElementById('password').value });
+  if(error){ msg.textContent='Credenciales incorrectas.'; msg.classList.remove('hidden'); } else { location.reload(); }
+});
+document.getElementById('btn-salir').addEventListener('click', async ()=>{ await sb.auth.signOut(); location.reload(); });
+document.getElementById('btn-actualizar').addEventListener('click', render);
+document.getElementById('cc').addEventListener('change', render);
+document.getElementById('anio').addEventListener('change', render);
 
-async function render(){
-  destruir();
-  const anio = +document.getElementById('anio').value;
-  const ccF = document.getElementById('cc').value;
-  const [a,o,p,e] = await Promise.all([
+async function cargarCCs(){
+  const { data } = await sb.from('centros_costos').select('*').order('codigo');
+  const sel=document.getElementById('cc');
+  sel.innerHTML='<option value="">Todos</option>'+(data||[]).map(c=>`<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`).join('');
+}
+async function datos(anio, ccId){
+  const [c,a,o,p,e]=await Promise.all([
+    sb.from('centros_costos').select('*').order('codigo'),
     sb.from('areas').select('*'),
     sb.from('actividades_operativas').select('*').eq('anio',anio),
     sb.from('programacion_metas').select('*').eq('anio',anio),
     sb.from('ejecucion_mensual').select('*').eq('anio',anio)
   ]);
-  let areas = a.data||[];
-  if(ccF) areas = areas.filter(x=>x.centro_costo_id===ccF);
-  const aIds = areas.map(x=>x.id);
-  const aois = (o.data||[]).filter(x=>aIds.includes(x.area_id));
-  const oIds = aois.map(x=>x.id);
-  const prog = (p.data||[]).filter(x=>oIds.includes(x.actividad_id));
-  const ejec = (e.data||[]).filter(x=>oIds.includes(x.actividad_id));
-  const meses=[...Array(12).keys()].map(i=>i+1);
-  const sum=(arr,f,m)=>arr.filter(x=>x.mes===m).reduce((s,x)=>s+Number(x[f]||0),0);
-  const pFin=meses.map(m=>sum(prog,'meta_financiera',m)), eFin=meses.map(m=>sum(ejec,'ejecucion_financiera',m));
-  const pFis=meses.map(m=>sum(prog,'meta_fisica',m)),  eFis=meses.map(m=>sum(ejec,'ejecucion_fisica',m));
-  const tPF=pFin.reduce((a,b)=>a+b,0), tEF=eFin.reduce((a,b)=>a+b,0);
-  const tPFi=pFis.reduce((a,b)=>a+b,0), tEFi=eFis.reduce((a,b)=>a+b,0);
-  document.getElementById('k-pfin').textContent='S/ '+fmt(tPF);
-  document.getElementById('k-efin').textContent='S/ '+fmt(tEF);
-  document.getElementById('k-pfin-pct').textContent=(tPF>0?(tEF/tPF*100).toFixed(1):0)+'% del PIM';
-  document.getElementById('k-pfis').textContent=fmt(tPFi);
-  document.getElementById('k-efis').textContent=fmt(tEFi);
-  document.getElementById('k-pfis-pct').textContent=(tPFi>0?(tEFi/tPFi*100).toFixed(1):0)+'% de la meta';
-
-  CH.fin=new Chart(document.getElementById('chart-fin'),{type:'bar',data:{labels:MA,datasets:[
-    {label:'Programado',data:pFin,backgroundColor:'#1E2A3A'},{label:'Ejecutado',data:eFin,backgroundColor:'#C9A350'}]},
-    options:{responsive:true,scales:{y:{ticks:{callback:v=>'S/ '+fmt(v)}}}}});
-  CH.fis=new Chart(document.getElementById('chart-fis'),{type:'bar',data:{labels:MA,datasets:[
-    {label:'Programado',data:pFis,backgroundColor:'#1E2A3A'},{label:'Ejecutado',data:eFis,backgroundColor:'#2D7A4E'}]},
-    options:{responsive:true}});
-  CH.donut=new Chart(document.getElementById('chart-donut'),{type:'doughnut',data:{labels:['Ejecutado','Por ejecutar'],
-    datasets:[{data:[Math.round(tEF),Math.max(0,Math.round(tPF-tEF))],backgroundColor:['#C9A350','#E5DDD0']}]},
-    options:{responsive:true,maintainAspectRatio:false}});
-
-  // Tabla por CC
-  const { data: ccs } = await sb.from('centros_costos').select('*').order('codigo');
-  let rows='';
-  (ccs||[]).forEach(c=>{
-    if(ccF && c.id!==ccF) return;
-    const arIds=areas.filter(x=>!ccF||x.centro_costo_id===c.id).filter(x=>x.centro_costo_id===c.id).map(x=>x.id);
-    const oo=aois.filter(x=>arIds.includes(x.area_id)).map(x=>x.id);
-    const pf=prog.filter(x=>oo.includes(x.actividad_id)).reduce((s,x)=>s+Number(x.meta_financiera||0),0);
-    const ef=ejec.filter(x=>oo.includes(x.actividad_id)).reduce((s,x)=>s+Number(x.ejecucion_financiera||0),0);
-    const pfi=prog.filter(x=>oo.includes(x.actividad_id)).reduce((s,x)=>s+Number(x.meta_fisica||0),0);
-    const efi=ejec.filter(x=>oo.includes(x.actividad_id)).reduce((s,x)=>s+Number(x.ejecucion_fisica||0),0);
-    const bar=(p,e)=>{const pc=p>0?(e/p*100):0;const col=pc>=90?'#2D7A4E':pc>=75?'#C9A350':'#B33B3B';
-      return `<div class="flex items-center gap-2"><div class="flex-1 h-1.5 bg-slate-200 rounded"><div class="h-1.5 rounded" style="width:${Math.min(100,pc)}%;background:${col}"></div></div><span class="text-xs font-semibold" style="color:${col}">${pc.toFixed(1)}%</span></div>`;};
-    rows+=`<tr class="hover:bg-slate-50"><td class="p-2">${c.codigo} — ${c.nombre}</td>
-      <td class="p-2 text-right">S/ ${fmt(pf)}</td><td class="p-2 text-right">S/ ${fmt(ef)}</td><td class="p-2">${bar(pf,ef)}</td>
-      <td class="p-2 text-right">${fmt(pfi)}</td><td class="p-2 text-right">${fmt(efi)}</td><td class="p-2">${bar(pfi,efi)}</td></tr>`;
-  });
-  document.getElementById('tabla-cc').innerHTML=rows||'<tr><td colspan="7" class="p-4 text-center text-slate-500">Sin datos.</td></tr>';
+  return {ccs:c.data||[],areas:a.data||[],aois:o.data||[],prog:p.data||[],ejec:e.data||[],ccId};
 }
-init();
-</script>
-</body>
-</html>
+function filtrar(D){
+  let areas=D.areas; if(D.ccId) areas=areas.filter(x=>x.centro_costo_id===D.ccId);
+  const aIds=new Set(areas.map(x=>x.id));
+  const aois=D.aois.filter(x=>aIds.has(x.area_id));
+  const oIds=new Set(aois.map(x=>x.id));
+  return { prog:D.prog.filter(x=>oIds.has(x.actividad_id)), ejec
